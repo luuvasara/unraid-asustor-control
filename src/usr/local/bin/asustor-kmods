@@ -1,0 +1,100 @@
+#!/bin/bash
+# asustor-kmods {status|install|load|remove} - optional LED/button kernel-module add-on.
+#
+# Unraid's kernel ships no leds-gpio / gpio-keys-polled, so the LED and button devices that the
+# asustor platform driver registers stay without a driver. This add-on installs those modules
+# (plus LED triggers) for the RUNNING kernel - but only from a build made for exactly that kernel,
+# listed in kmods.manifest with its MD5. On any other kernel it refuses and changes nothing.
+#
+#   status   print what is known for the running kernel (exit 0 = build available)
+#   install  fetch (flash cache first, then the repository) + verify + installpkg + load
+#   load     same as install but never downloads (used at boot from the flash cache)
+#   remove   unload and removepkg
+#
+# Temporary: these modules are offered to the Asustor Platform Drivers plugin (Terebi42). Once a
+# package other than ours (or the kernel itself) provides leds-gpio and gpio_keys_polled for the
+# running kernel, that copy wins: install/load only modprobe it and never install ours.
+#
+# ASUSTOR_SYSROOT prefixes paths and ASUSTOR_KVER replaces `uname -r` (test hooks; with a
+# SYSROOT set, installpkg/modprobe/wget are not run, only reported).
+
+R="${ASUSTOR_SYSROOT:-}"
+KV="${ASUSTOR_KVER:-$(uname -r)}"
+MANIFEST="$R/usr/local/emhttp/plugins/asustor-control/kmods.manifest"
+CACHE="$R/boot/config/plugins/asustor-control/kmods"
+MODS="leds-gpio gpio_keys_polled ledtrig-oneshot ledtrig-timer ledtrig-heartbeat"
+run() { if [ -n "$R" ]; then echo "would run: $*" >&2; else "$@"; fi; }
+
+lookup() {                      # sets FILE MD5 URLBASE for $KV from the manifest
+    local k f m
+    FILE=""; MD5=""; URLBASE=""
+    [ -r "$MANIFEST" ] || return 1
+    while read -r k f m; do
+        case "$k" in "#"*|"") continue ;; url=*) URLBASE=${k#url=}; continue ;; esac
+        [ "$k" = "$KV" ] && { FILE=$f; MD5=$m; }
+    done < "$MANIFEST"
+    [ -n "$FILE" ]
+}
+provider() {                    # prints who else provides both drivers for $KV; exit 1 = nobody
+    local p d hit=""
+    for d in leds-gpio gpio_keys_polled; do
+        if grep -qE "/$d\.ko(\.xz)?\$" "$R/lib/modules/$KV/modules.builtin" 2>/dev/null; then hit="$hit kernel"; continue; fi
+        p=$(grep -lE "^lib/modules/$KV/.*/$d\.ko(\.xz)?\$" "$R"/var/log/packages/* 2>/dev/null | grep -v '/asustor-ledkeys-kmod-' | head -1)
+        [ -n "$p" ] || return 1
+        hit="$hit ${p##*/}"
+    done
+    echo "$hit" | tr ' ' '\n' | sed '/^$/d' | sort -u | paste -sd, -
+}
+builds() { awk '!/^#/ && !/^url=/ && NF==3 {printf "%s%s", s, $1; s=", "}' "$MANIFEST" 2>/dev/null; }
+refuse() {
+    echo "No LED/button module build for kernel $KV (builds exist for: $(builds))."
+    echo "Nothing was installed; the LEDs and buttons keep their firmware state."
+    exit 3
+}
+
+case "$1" in
+status)
+    if P=$(provider); then
+        echo "kernel $KV: leds-gpio and gpio-keys-polled provided by $P; the add-on is not needed"
+        [ -d "$R/sys/module/leds_gpio" ] && echo "leds_gpio: loaded" || echo "leds_gpio: not loaded"
+        [ -d "$R/sys/module/gpio_keys_polled" ] && echo "gpio_keys_polled: loaded" || echo "gpio_keys_polled: not loaded"
+        exit 6
+    fi
+    if lookup; then
+        echo "kernel $KV: build $FILE"
+        [ -f "$CACHE/$FILE" ] && echo "cached on flash: yes" || echo "cached on flash: no"
+        [ -d "$R/sys/module/leds_gpio" ] && echo "leds_gpio: loaded" || echo "leds_gpio: not loaded"
+        [ -d "$R/sys/module/gpio_keys_polled" ] && echo "gpio_keys_polled: loaded" || echo "gpio_keys_polled: not loaded"
+        exit 0
+    fi
+    echo "kernel $KV: no build (builds exist for: $(builds))"; exit 3 ;;
+install|load)
+    if P=$(provider); then          # prefer the platform-driver package's (or kernel's) own copy
+        for m in $MODS; do run /sbin/modprobe "$m" || echo "warning: modprobe $m failed"; done
+        echo "Using leds-gpio/gpio-keys-polled from $P on kernel $KV; the add-on package was not installed."
+        exit 0
+    fi
+    lookup || refuse
+    mkdir -p "$CACHE"
+    if [ ! -f "$CACHE/$FILE" ]; then
+        [ "$1" = load ] && { echo "Add-on enabled but $FILE is not cached on the flash; use Install on the plugin page."; exit 4; }
+        [ -n "$URLBASE" ] || { echo "manifest has no url= line"; exit 4; }
+        echo "Downloading $FILE ..."
+        run wget -q -T 20 -O "$CACHE/$FILE.part" "$URLBASE/$FILE" || { rm -f "$CACHE/$FILE.part"; echo "download failed"; exit 4; }
+        [ -n "$R" ] || mv "$CACHE/$FILE.part" "$CACHE/$FILE"
+    fi
+    if [ -f "$CACHE/$FILE" ] && [ "$(md5sum < "$CACHE/$FILE" | cut -d' ' -f1)" != "$MD5" ]; then
+        echo "MD5 mismatch for $FILE; removed it, nothing installed."; rm -f "$CACHE/$FILE"; exit 5
+    fi
+    [ -d "$R/var/log/packages" ] && ls "$R/var/log/packages/${FILE%.txz}" >/dev/null 2>&1 \
+        || run installpkg "$CACHE/$FILE" >/dev/null
+    run /sbin/depmod -a "$KV"
+    for m in $MODS; do run /sbin/modprobe "$m" || echo "warning: modprobe $m failed"; done
+    [ -d "$R/sys/module/asustor" ] || echo "note: the asustor platform driver is not loaded, so there are no LEDs/buttons to bind to."
+    echo "LED/button modules loaded for kernel $KV." ;;
+remove)
+    for m in gpio_keys_polled leds_gpio ledtrig_heartbeat ledtrig_timer; do run /sbin/rmmod "$m" 2>/dev/null; done
+    lookup && run removepkg "${FILE%.txz}" >/dev/null 2>&1
+    echo "LED/button modules removed." ;;
+*) echo "Usage: $0 {status|install|load|remove}"; exit 1 ;;
+esac

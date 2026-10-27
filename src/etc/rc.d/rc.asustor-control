@@ -1,0 +1,214 @@
+#!/bin/bash
+# Start/stop asustor-control daemons (LCD + hwmon + front-panel LEDs/buttons) + driver check
+
+LOGFILE="/var/local/emhttp/plugins/asustor-control/action.log"
+
+ac_log() {
+    mkdir -p "$(dirname "$LOGFILE")"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOGFILE"
+}
+
+LCD_BIN="/usr/local/bin/asustor-lcd"
+LCD_PID="/var/run/asustor-lcd.pid"
+HWMON_BIN="/usr/local/bin/asustor-hwmon"
+HWMON_PID="/var/run/asustor-hwmon.pid"
+LEDS_BIN="/usr/local/bin/asustor-leds"
+LEDS_PID="/var/run/asustor-leds.pid"
+BUTTONS_BIN="/usr/local/bin/asustor-buttons"
+BUTTONS_PID="/var/run/asustor-buttons.pid"
+LEDCFG="/boot/config/plugins/asustor-control/leds.cfg"
+
+stop_daemon() {
+    local pidfile=$1 name=$2 bin=$3
+    local pid i
+    if [ -f "$pidfile" ]; then
+        pid=$(cat "$pidfile" 2>/dev/null)
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "Stopping $name (PID $pid)..."
+            kill "$pid" 2>/dev/null
+            i=0
+            while kill -0 "$pid" 2>/dev/null && (( i++ < 20 )); do sleep 0.5; done
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "$name did not exit, killing"; kill -9 "$pid" 2>/dev/null; sleep 0.5
+                if kill -0 "$pid" 2>/dev/null; then
+                    echo "ERROR: $name (PID $pid) survived SIGKILL; leaving pid file in place" >&2
+                    ac_log "ERROR: $name PID $pid survived SIGKILL"
+                    return 1
+                fi
+            fi
+        fi
+    fi
+    # Sweep instances the pid file did not know about (e.g. after a pid file
+    # was lost). Matches only the exact daemon command line.
+    for pid in $(pgrep -f "^/bin/bash $bin\$"); do
+        echo "Stopping stray $name (PID $pid)..."
+        kill "$pid" 2>/dev/null
+        i=0
+        while kill -0 "$pid" 2>/dev/null && (( i++ < 20 )); do sleep 0.5; done
+        kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+    done
+    # Never unlink the .lock file: flock exclusion is tied to its inode, and a
+    # stale unheld lock file is harmless. Only the pid file is cleared.
+    rm -f "$pidfile"
+}
+
+set_status_led() {
+    local state=$1  # "on" or "off"
+    # With leds-gpio bound the line belongs to the LED class device; poking the chip behind
+    # gpiolib's back would desync it. asustor-leds (if running) re-asserts its state in <= 5 s.
+    if [ -e /sys/class/leds/green:status/brightness ]; then
+        echo none > /sys/class/leds/green:status/trigger
+        [ "$state" = "on" ] && echo 1 > /sys/class/leds/green:status/brightness || echo 0 > /sys/class/leds/green:status/brightness
+        return
+    fi
+    [ -c /dev/port ] || return 1
+    perl -e '
+        my $state = $ARGV[0];
+        open(my $p, "+<", "/dev/port") or exit 1;
+        binmode $p;
+        sub pr { seek($p,$_[0],0); my $b; read($p,$b,1); ord($b) }
+        sub pw { seek($p,$_[0],0); print $p chr($_[1]) }
+        sub sr { pw(0x2E,$_[0]); pr(0x2F) }
+        sub sw { pw(0x2E,$_[0]); pw(0x2F,$_[1]) }
+        pw(0x2E,0x87); pw(0x2E,0x01); pw(0x2E,0x55); pw(0x2E,0x55);
+        pw(0x2E,0x07); pw(0x2F,0x07);
+        sw(0xC3, sr(0xC3) | 0x80);   # Simple I/O enable GP47
+        sw(0xCB, sr(0xCB) | 0x80);   # Output enable GP47
+        pw(0x2E,0x02); pw(0x2F,0x02);
+        my $d = pr(0x0A03);
+        if ($state eq "on") { pw(0x0A03, $d & 0x7F) }
+        else                { pw(0x0A03, $d | 0x80) }
+        close($p);
+    ' "$state"
+}
+
+start_lcd() {
+    if [ -f "$LCD_PID" ] && kill -0 "$(cat "$LCD_PID" 2>/dev/null)" 2>/dev/null; then
+        echo "asustor-lcd already running"
+        return
+    fi
+    rm -f "$LCD_PID"
+    echo "Starting asustor-lcd..."
+    nohup "$LCD_BIN" >> /var/log/asustor-lcd.log 2>&1 &
+    verify_started "$LCD_BIN" "asustor-lcd" /var/log/asustor-lcd.log
+}
+
+stop_lcd() {
+    stop_daemon "$LCD_PID" "asustor-lcd" "$LCD_BIN"
+}
+
+start_hwmon() {
+    if [ -f "$HWMON_PID" ] && kill -0 "$(cat "$HWMON_PID" 2>/dev/null)" 2>/dev/null; then
+        echo "asustor-hwmon already running"
+        return
+    fi
+    rm -f "$HWMON_PID"
+    echo "Starting asustor-hwmon..."
+    nohup "$HWMON_BIN" >> /var/log/asustor-hwmon.log 2>&1 &
+    verify_started "$HWMON_BIN" "asustor-hwmon" /var/log/asustor-hwmon.log
+}
+
+verify_started() {             # $1 bin, $2 name, $3 log: the daemon must still be alive after 2 s
+    sleep 2
+    if pgrep -f "^/bin/bash $1\$" >/dev/null; then return 0; fi
+    echo "ERROR: $2 exited right after start; last log lines:" >&2
+    tail -n 3 "$3" >&2
+    ac_log "ERROR: $2 failed to start: $(tail -n 1 "$3")"
+    return 1
+}
+
+stop_hwmon() {
+    stop_daemon "$HWMON_PID" "asustor-hwmon" "$HWMON_BIN"
+}
+
+start_simple() {               # $1 bin, $2 pidfile, $3 name: daemons that exit 0 when there is nothing to drive
+    if [ -f "$2" ] && kill -0 "$(cat "$2" 2>/dev/null)" 2>/dev/null; then echo "$3 already running"; return; fi
+    rm -f "$2"
+    nohup "$1" >> "/var/log/$3.log" 2>&1 &
+}
+
+kmods_enabled() { grep -q '^kmods=yes' "$LEDCFG" 2>/dev/null; }
+
+# Optional LED/button module add-on: load from the flash cache before the daemons start. Binding
+# leds-gpio re-drives the panel GPIOs (power:lcd included) for a moment, so the LCD daemon is
+# (re)started after this, never before.
+load_kmods() {
+    kmods_enabled || return 0
+    [ -d /sys/module/leds_gpio ] && return 0
+    /usr/local/bin/asustor-kmods load 2>&1 | while read -r l; do echo "$l"; ac_log "kmods: $l"; done
+}
+
+start_all() {
+    /usr/local/bin/asustor-drivercheck --notify || ac_log "$(sed -n 's/.*"message":"\([^"]*\)".*/\1/p' /var/local/emhttp/plugins/asustor-control/drivers.json)"
+    load_kmods
+    [ -e /sys/class/leds/green:status ] || set_status_led on
+    start_lcd
+    start_hwmon
+    start_simple "$LEDS_BIN" "$LEDS_PID" asustor-leds
+    start_simple "$BUTTONS_BIN" "$BUTTONS_PID" asustor-buttons
+}
+
+stop_all() {
+    stop_daemon "$BUTTONS_PID" "asustor-buttons" "$BUTTONS_BIN"
+    stop_daemon "$LEDS_PID" "asustor-leds" "$LEDS_BIN"
+    stop_lcd
+    stop_hwmon
+}
+
+case "$1" in
+    start)
+        start_all
+        ac_log "Services started"
+        ;;
+    stop)
+        stop_all
+        ac_log "Services stopped"
+        ;;
+    restart)
+        stop_all
+        sleep 1
+        start_all
+        ac_log "Services restarted"
+        ;;
+    restart_leds)
+        stop_daemon "$BUTTONS_PID" "asustor-buttons" "$BUTTONS_BIN"
+        stop_daemon "$LEDS_PID" "asustor-leds" "$LEDS_BIN"
+        start_simple "$LEDS_BIN" "$LEDS_PID" asustor-leds
+        start_simple "$BUTTONS_BIN" "$BUTTONS_PID" asustor-buttons
+        ;;
+    drivercheck)
+        /usr/local/bin/asustor-drivercheck
+        ;;
+    start_lcd)
+        start_lcd
+        ;;
+    stop_lcd)
+        stop_lcd
+        ;;
+    status)
+        echo -n "lcd: "
+        if [ -f "$LCD_PID" ] && kill -0 "$(cat "$LCD_PID")" 2>/dev/null; then
+            echo "running (PID $(cat "$LCD_PID"))"
+        else
+            echo "stopped"
+        fi
+        for d in hwmon:$HWMON_PID leds:$LEDS_PID buttons:$BUTTONS_PID; do
+            echo -n "${d%%:*}: "
+            if [ -f "${d#*:}" ] && kill -0 "$(cat "${d#*:}")" 2>/dev/null; then
+                echo "running (PID $(cat "${d#*:}"))"
+            else
+                echo "stopped"
+            fi
+        done
+        ;;
+    led_on)
+        set_status_led on
+        ;;
+    led_off)
+        set_status_led off
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|restart_leds|start_lcd|stop_lcd|led_on|led_off|drivercheck|status}"
+        exit 1
+        ;;
+esac

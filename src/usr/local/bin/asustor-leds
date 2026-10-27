@@ -1,0 +1,283 @@
+#!/bin/bash
+# asustor-leds: front-panel LEDs for Asustor NAS units (AS6706T and relatives) on Unraid.
+#
+# Needs the LED class devices that leds-gpio creates from the asustor platform driver
+# (/sys/class/leds/sataN:green:disk, sataN:red:disk, green:status, red:status, ...).
+# Without them it exits at once: nothing to drive.
+#
+#   sataN:green:disk  on = a disk sits in bay N; blinks off on disk I/O (from /sys/block/sdX/stat)
+#   sataN:red:disk    on = Unraid reports that disk disabled/invalid/emulated or with read errors
+#   green:status      steady = array started; slow blink = parity check/rebuild; fast blink = stopped
+#   red:status        on = any array disk disabled, invalid or missing
+#   Locate            the bay's red LED blinks for N s (request file written by the plugin page)
+#
+# Bays: the AS6706T's six bays hang off its ASMedia ASM1166 (1b21:1166); bay N = that
+# controller's Nth ATA port. Override with bay_ports=<ata port numbers in bay order> in leds.cfg.
+#
+# Cost: the activity loop uses only bash builtins (read/printf/[[ ]], read -t on a private FIFO as
+# the sleep), so it forks nothing. It polls every 200 ms while any bay saw I/O in the last 10 s and
+# every 1 s otherwise (activity_poll_ms / idle_poll_ms); slower work (disks.ini, var.ini) runs
+# every 5 s; the bay map (a few readlink forks) is rebuilt only when the set of sd* devices changes.
+# Never writes power:* LEDs (one of them powers the LCD/front panel).
+#
+# ASUSTOR_SYSROOT prefixes every absolute path; ASUSTOR_ONESHOT=N runs N loop passes and exits
+# (test hooks).
+
+R="${ASUSTOR_SYSROOT:-}"
+LEDS="$R/sys/class/leds"
+CFG="$R/boot/config/plugins/asustor-control/leds.cfg"
+STATE_DIR="$R/var/local/emhttp/plugins/asustor-control"
+STATE="$STATE_DIR/leds.json"
+REQ="$STATE_DIR/locate.req"
+PIDFILE="$R/var/run/asustor-leds.pid"
+FIFO="$R/var/run/asustor-leds.tick"
+DISKS_INI="$R/var/local/emhttp/disks.ini"
+VAR_INI="$R/var/local/emhttp/var.ini"
+ACTION_LOG="$STATE_DIR/action.log"
+NBAYS=6
+
+cfg_get() {                    # $1 key, $2 default (key=value lines, # comments)
+    local k v
+    [ -f "$CFG" ] && while IFS='=' read -r k v; do
+        [ "$k" = "$1" ] && { v=${v%%#*}; v=${v//\"/}; echo "${v// /}"; return; }
+    done < "$CFG"
+    echo "$2"
+}
+action_log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$ACTION_LOG"; }
+
+POLL_MS=$(cfg_get activity_poll_ms 200); [[ $POLL_MS =~ ^[0-9]+$ ]] && (( POLL_MS >= 50 && POLL_MS <= 2000 )) || POLL_MS=200
+IDLE_MS=$(cfg_get idle_poll_ms 1000); [[ $IDLE_MS =~ ^[0-9]+$ ]] && (( IDLE_MS >= POLL_MS && IDLE_MS <= 5000 )) || IDLE_MS=1000
+POLL_S=$(printf '%d.%03d' $((POLL_MS / 1000)) $((POLL_MS % 1000)))
+IDLE_S=$(printf '%d.%03d' $((IDLE_MS / 1000)) $((IDLE_MS % 1000)))
+[ "$(cfg_get leds_enabled yes)" = "yes" ] || { echo "asustor-leds: disabled in leds.cfg" >&2; exit 0; }
+[ -d "$LEDS/green:status" ] || [ -d "$LEDS/sata1:green:disk" ] || {
+    echo "asustor-leds: no Asustor LED devices (leds-gpio not loaded?), nothing to do" >&2; exit 0; }
+mkdir -p "$STATE_DIR" "$(dirname "$PIDFILE")"
+
+# --- LED writes (only on change; printf + redirection are builtins) ---------
+declare -A CUR                 # last value written per LED file
+led_set() {                    # $1 led name, $2 attribute, $3 value
+    local f="$LEDS/$1/$2"
+    [ "${CUR[$f]}" = "$3" ] && return 0
+    [ -e "$f" ] || return 1
+    printf '%s' "$3" > "$f" 2>/dev/null || return 1
+    if [ "$2" = trigger ]; then   # a trigger change resets brightness/delays in the kernel
+        local a; for a in brightness delay_on delay_off invert; do unset "CUR[$LEDS/$1/$a]"; done
+    fi
+    CUR[$f]=$3
+}
+declare -A AVAIL               # led -> " none timer oneshot ... " (the trigger file lists every trigger)
+load_triggers() {              # (re)read the available triggers; ledtrig-* modules can load later
+    local d t
+    for d in "$LEDS"/*; do
+        [ -r "$d/trigger" ] && read -r t < "$d/trigger" && AVAIL[${d##*/}]=" ${t//[\[\]]/} "
+    done
+}
+has_trigger() { [[ ${AVAIL[$1]} == *" $2 "* ]]; }
+led_steady() {                 # $1 led, $2 0|1
+    led_set "$1" trigger none
+    led_set "$1" brightness "$2"
+}
+declare -A SOFTBLINK           # led -> half period in passes (used when ledtrig-timer is absent)
+led_blink() {                  # $1 led, $2 on ms, $3 off ms
+    if has_trigger "$1" timer; then
+        unset "SOFTBLINK[$1]"
+        led_set "$1" trigger timer && led_set "$1" delay_on "$2" && led_set "$1" delay_off "$3"
+    else
+        led_set "$1" trigger none; SOFTBLINK[$1]=$(( ($2 + POLL_MS - 1) / POLL_MS ))
+    fi
+}
+led_noblink() { unset "SOFTBLINK[$1]"; led_steady "$1" "$2"; }
+
+# --- bay map ------------------------------------------------------------------
+declare -a BAY_DEV             # bay (1..6) -> sdX or ""
+map_bays() {                   # fills BAY_DEV from the ASM1166's ATA ports (or bay_ports=)
+    local ports=() p dev path ctl vend devid b order
+    order=$(cfg_get bay_ports auto)
+    if [ "$order" != "auto" ]; then
+        IFS=',' read -r -a ports <<< "$order"
+    else
+        for p in "$R"/sys/class/ata_port/ata*; do
+            [ -e "$p" ] || continue
+            path=$(readlink -f "$p/device" 2>/dev/null) || continue
+            ctl=${path%/ata*}
+            read -r vend < "$ctl/vendor" 2>/dev/null; read -r devid < "$ctl/device" 2>/dev/null
+            [ "$vend:$devid" = "0x1b21:0x1166" ] && ports+=("${p##*/ata}")
+        done
+        if [ ${#ports[@]} -eq 0 ]; then     # not an AS6706T layout: take all ATA ports in order
+            for p in "$R"/sys/class/ata_port/ata*; do [ -e "$p" ] && ports+=("${p##*/ata}"); done
+        fi
+        IFS=$'\n' ports=($(printf '%s\n' "${ports[@]}" | sort -n)); unset IFS
+    fi
+    BAY_DEV=()
+    for (( b = 1; b <= NBAYS; b++ )); do BAY_DEV[$b]=""; done
+    for dev in "$R"/sys/block/sd*; do
+        [ -e "$dev" ] || continue
+        path=$(readlink -f "$dev" 2>/dev/null)
+        [[ $path =~ /ata([0-9]+)/ ]] || continue
+        for b in "${!ports[@]}"; do
+            (( b < NBAYS )) && [ "${ports[$b]}" = "${BASH_REMATCH[1]}" ] && BAY_DEV[$((b + 1))]=${dev##*/}
+        done
+    done
+}
+
+# --- Unraid state (every 5 s) --------------------------------------------------
+declare -A DNAME DSTAT DERR    # sdX -> Unraid name / status / numErrors
+read_disks_ini() {
+    local line dev="" name="" st="" err=""
+    DNAME=(); DSTAT=(); DERR=()
+    [ -r "$DISKS_INI" ] || return
+    while IFS= read -r line; do
+        case "$line" in
+            \[*) [ -n "$dev" ] && { DNAME[$dev]=$name; DSTAT[$dev]=$st; DERR[$dev]=$err; }; dev=""; name=""; st=""; err="" ;;
+            device=*) dev=${line#device=}; dev=${dev//\"/} ;;
+            name=*) name=${line#name=}; name=${name//\"/} ;;
+            status=*) st=${line#status=}; st=${st//\"/} ;;
+            numErrors=*) err=${line#numErrors=}; err=${err//\"/} ;;
+        esac
+    done < "$DISKS_INI"
+    [ -n "$dev" ] && { DNAME[$dev]=$name; DSTAT[$dev]=$st; DERR[$dev]=$err; }
+}
+declare -A VAR
+read_var_ini() {
+    local k v
+    VAR=()
+    [ -r "$VAR_INI" ] || return
+    while IFS='=' read -r k v; do
+        case "$k" in mdState|mdResync|mdNumDisabled|mdNumInvalid|mdNumMissing|fsState) VAR[$k]=${v//\"/} ;; esac
+    done < "$VAR_INI"
+}
+disk_fault() {                 # $1 sdX: 0 = Unraid says this disk needs attention
+    local st=${DSTAT[$1]}
+    case "$st" in ""|DISK_OK|DISK_NP|DISK_NP_MISSING) ;; *) return 0 ;; esac
+    [[ ${DERR[$1]:-0} =~ ^[0-9]+$ ]] && (( ${DERR[$1]:-0} > 0 ))
+}
+
+LOCATE_BAY=0; LOCATE_END=0
+check_locate() {               # request file: "<bay 1-6|0=all|stop> <seconds>"
+    local bay secs
+    [ -f "$REQ" ] || return
+    read -r bay secs < "$REQ"; rm -f "$REQ"
+    if [ "$bay" = "stop" ]; then LOCATE_END=0; return; fi
+    [[ $bay =~ ^[0-6]$ ]] || return
+    [[ $secs =~ ^[0-9]+$ ]] && (( secs >= 1 && secs <= 600 )) || secs=30
+    LOCATE_BAY=$bay; LOCATE_END=$(( SECONDS + secs ))
+    action_log "LED locate: bay ${bay/#0/all} for ${secs}s"
+}
+
+STATUS_DESC=""
+slow_cycle() {
+    local b dev led red mode n=0 bays=""
+    read_disks_ini; read_var_ini; check_locate
+    (( LOCATE_END > 0 && SECONDS >= LOCATE_END )) && { LOCATE_END=0; LOCATE_BAY=-1; }
+    for (( b = 1; b <= NBAYS; b++ )); do
+        dev=${BAY_DEV[$b]}; led="sata$b"
+        [ -d "$LEDS/$led:green:disk" ] || continue
+        if [ -z "$dev" ]; then led_steady "$led:green:disk" 0; else
+            # activity LED: oneshot (inverted = steady on, blinks off per shot) or software blink
+            if has_trigger "$led:green:disk" oneshot; then
+                led_set "$led:green:disk" trigger oneshot && led_set "$led:green:disk" invert 1 &&
+                led_set "$led:green:disk" delay_on 40 && led_set "$led:green:disk" delay_off 60
+            else led_set "$led:green:disk" trigger none; led_set "$led:green:disk" brightness 1; fi
+        fi
+        red=0; [ -n "$dev" ] && disk_fault "$dev" && red=1
+        if (( LOCATE_END > 0 )) && { [ "$LOCATE_BAY" = 0 ] || [ "$LOCATE_BAY" = "$b" ]; }; then
+            led_blink "$led:red:disk" 250 250
+        else led_noblink "$led:red:disk" $red; fi
+        bays="$bays${bays:+,}{\"bay\":$b,\"dev\":\"$dev\",\"name\":\"${DNAME[$dev]:-}\",\"status\":\"${DSTAT[$dev]:-}\",\"fault\":$red}"
+    done
+    # status LEDs
+    n=$(( ${VAR[mdNumDisabled]:-0} + ${VAR[mdNumInvalid]:-0} + ${VAR[mdNumMissing]:-0} ))
+    if [ "${VAR[mdState]}" = "STARTED" ]; then
+        if [[ ${VAR[mdResync]:-0} =~ ^[1-9] ]]; then mode="resync"; led_blink green:status 1000 1000
+        else mode="started"; led_noblink green:status 1; fi
+    else mode="stopped"; led_blink green:status 200 800; fi
+    if (( n > 0 )); then led_noblink red:status 1; else led_noblink red:status 0; fi
+    STATUS_DESC="$mode"
+    local js
+    printf -v js '{"ts":%s,"array":"%s","faults":%s,"locate_bay":%s,"locate_left":%s,"poll_ms":%s,"bays":[%s]}' \
+        "$EPOCHSECONDS" "$mode" "$n" "$(( LOCATE_END > 0 ? LOCATE_BAY : -1 ))" \
+        "$(( LOCATE_END > 0 ? LOCATE_END - SECONDS : 0 ))" "$POLL_MS" "$bays"
+    # rewrite (one mv fork) only when something other than the timestamp changed, or once a minute
+    if [ "${js#*,}" != "${LAST_JS:-}" ] || (( EPOCHSECONDS - ${LAST_JS_TS:-0} >= 60 )); then
+        printf '%s\n' "$js" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"; LAST_JS_TS=$EPOCHSECONDS
+    fi
+    LAST_JS=${js#*,}
+}
+
+declare -A PREV                # bay -> last /sys/block/sdX/stat line
+declare -A OFFAT               # bay -> pass at which a software-blinked LED goes back on
+FAST_UNTIL=0
+activity_pass() {              # $1 pass counter
+    local b dev line led
+    for b in "${!BAY_DEV[@]}"; do
+        dev=${BAY_DEV[$b]}; [ -n "$dev" ] || continue
+        led="sata$b:green:disk"
+        if [ -n "${OFFAT[$b]}" ] && (( $1 >= OFFAT[$b] )); then led_set "$led" brightness 1; unset "OFFAT[$b]"; fi
+        read -r line < "$R/sys/block/$dev/stat" 2>/dev/null || continue
+        if [ -n "${PREV[$b]}" ] && [ "$line" != "${PREV[$b]}" ]; then
+            FAST_UNTIL=$(( SECONDS + 10 ))
+            if [ "${CUR[$LEDS/$led/trigger]}" = "oneshot" ]; then printf 1 > "$LEDS/$led/shot" 2>/dev/null
+            else led_set "$led" brightness 0; OFFAT[$b]=$(( $1 + 1 )); fi
+        fi
+        PREV[$b]=$line
+    done
+    for led in "${!SOFTBLINK[@]}"; do          # timer-trigger fallback
+        (( ($1 / SOFTBLINK[$led]) % 2 )) && led_set "$led" brightness 0 || led_set "$led" brightness 1
+    done
+}
+
+restore_leds() {               # hand the panel back in a plain, sane state
+    local b
+    for (( b = 1; b <= NBAYS; b++ )); do
+        [ -d "$LEDS/sata$b:red:disk" ] && led_noblink "sata$b:red:disk" 0
+        [ -d "$LEDS/sata$b:green:disk" ] && led_steady "sata$b:green:disk" $(( ${#BAY_DEV[$b]} > 0 ))
+    done
+    led_noblink green:status 1; led_noblink red:status 0
+}
+
+# --- main -------------------------------------------------------------------
+if [ -z "${ASUSTOR_ONESHOT:-}" ]; then
+    exec 9>"$PIDFILE.lock"
+    flock -w 15 9 || { echo "Another asustor-leds instance is running." >&2; exit 1; }
+    echo $$ > "$PIDFILE"
+fi
+[ -p "$FIFO" ] || { rm -f "$FIFO"; mkfifo -m 600 "$FIFO"; }
+exec 8<>"$FIFO"                # read -t on this never gets data: a fork-free sleep
+
+on_term() {
+    restore_leds
+    [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"
+    exit 0
+}
+trap on_term INT TERM
+
+# The IT8625E blinks green:status (GP47) in hardware from power-on; that overrides the GPIO,
+# so stop it while we own the LED (asustor_it87's gpled1_blink; 47 = GP47).
+for f in "$R"/sys/devices/platform/asustor_it87.*/hwmon/hwmon*/gpled1_blink; do
+    [ -w "$f" ] && read -r v < "$f" && [ "$v" = "47" ] && printf 0 > "$f"
+done
+
+map_bays; load_triggers
+m=""; for (( b = 1; b <= NBAYS; b++ )); do m="$m $b=${BAY_DEV[$b]:--}"; done
+echo "asustor-leds started: poll ${POLL_MS} ms, bays:$m" >&2
+DEVS=("$R"/sys/block/sd*); LAST_DEVS="${DEVS[*]}"
+pass=0; slow_cycle; NEXT_SLOW=$(( SECONDS + 5 )); NEXT_MAP=$(( SECONDS + 60 ))
+while :; do
+    activity_pass $pass
+    pass=$(( pass + 1 ))
+    if (( SECONDS >= NEXT_SLOW )); then
+        if (( SECONDS >= NEXT_MAP )); then   # hot swap: re-map only if the set of sd* devices changed
+            DEVS=("$R"/sys/block/sd*); [ "${DEVS[*]}" != "$LAST_DEVS" ] && { map_bays; LAST_DEVS="${DEVS[*]}"; }
+            load_triggers; NEXT_MAP=$(( SECONDS + 60 ))
+        fi
+        slow_cycle; NEXT_SLOW=$(( SECONDS + 5 ))
+    fi
+    [ -n "${ASUSTOR_ONESHOT:-}" ] && (( pass >= ASUSTOR_ONESHOT )) && break
+    if (( SECONDS < FAST_UNTIL || ${#SOFTBLINK[@]} > 0 || ${#OFFAT[@]} > 0 )); then
+        read -t "$POLL_S" -u 8 _ 2>/dev/null
+    else
+        read -t "$IDLE_S" -u 8 _ 2>/dev/null
+    fi
+done
+[ -n "${ASUSTOR_ONESHOT:-}" ] && { slow_cycle; exit 0; }

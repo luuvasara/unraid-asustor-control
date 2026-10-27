@@ -1,0 +1,275 @@
+#!/bin/bash
+# asustor-lcd: LCD display daemon for Asustor NAS on Unraid
+# Implements Asustor serial protocol (per mafredri/lcm) for 16x2 LCD
+set -uo pipefail
+
+TZ=$(sed -n 's/^timeZone="\(.*\)"/\1/p' /boot/config/ident.cfg 2>/dev/null | tr -d '\r')
+[ -n "$TZ" ] && [ ! -f "/usr/share/zoneinfo/$TZ" ] && TZ="${TZ/Kiev/Kyiv}"
+export TZ="${TZ:-UTC}"
+
+CONFIG="/boot/config/plugins/asustor-control/lcd.ini"
+PIDFILE="/var/run/asustor-lcd.pid"
+STATE="/var/local/emhttp/plugins/asustor-control/lcd.json"
+
+MSG_COMMAND=240     # 0xF0
+FUNC_FLUSH=0        # 0x00
+FUNC_DISPLAY=17     # 0x11
+FUNC_CLEAR=18       # 0x12
+FUNC_SET_DISPLAY=39 # 0x27
+
+SERIAL_FD=3
+RUNNING=true
+
+cleanup() {
+    if [ -n "${PORT:-}" ] && { : >&$SERIAL_FD; } 2>/dev/null; then
+        set_line 0 "$(hostname -s)"
+        set_line 1 "Shutting down..."
+        sleep 2
+        send_msg $FUNC_DISPLAY 0
+        exec 3>&-
+    fi
+    # Only remove the pid file if it is still ours (a replacement may have started).
+    [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"
+    echo "asustor-lcd stopped." >&2
+    exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+cfg() {
+    local key=$1 default=$2
+    [ -f "$CONFIG" ] || { echo "$default"; return; }
+    local val
+    val=$(sed -n "s/^${key}[[:space:]]*=[[:space:]]*//p" "$CONFIG" | tail -1)
+    echo "${val:-$default}"
+}
+
+# Send a binary protocol message to the LCD
+# Usage: send_msg <function_byte> [payload_byte ...]
+send_msg() {
+    local func=$1
+    shift
+    local -a payload=("$@")
+    local length=${#payload[@]}
+
+    local -a msg=($MSG_COMMAND $length $func "${payload[@]}")
+
+    local sum=0
+    for b in "${msg[@]}"; do
+        (( sum += b ))
+    done
+    msg+=($(( sum & 0xFF )))
+
+    local fmt=""
+    for b in "${msg[@]}"; do
+        printf -v hex '\\x%02x' "$b"
+        fmt+="$hex"
+    done
+
+    sleep 0.001
+    printf "$fmt" >&$SERIAL_FD
+    sleep 0.02
+}
+
+# Write text to one LCD line (0=top, 1=bottom)
+set_line() {
+    local line=$1
+    local text
+    text=$(printf '%-16.16s' "$2")
+
+    local -a payload=($line 0)
+    local i ch
+    for (( i=0; i<16; i++ )); do
+        ch="${text:i:1}"
+        if [ -n "$ch" ]; then
+            printf -v byte '%d' "'$ch"
+            payload+=($byte)
+        else
+            payload+=(32)
+        fi
+    done
+
+    send_msg $FUNC_SET_DISPLAY "${payload[@]}"
+}
+
+write_lcd() {
+    set_line 0 "$1"
+    set_line 1 "$2"
+}
+
+# --- Screen generators ---
+
+screen_hostname() {
+    L1=$(hostname -s)
+    L2=$(date '+%H:%M  %d/%m/%y')
+}
+
+screen_ip() {
+    L1="IP Address:"
+    L2=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([^ ]*\).*/\1/p')
+    [ -z "$L2" ] && L2="unknown"
+}
+
+screen_temps() {
+    local max_d=0 cpu=""
+    if [ -f /var/local/emhttp/disks.ini ]; then
+        max_d=$(awk -F= '/^temp=/{gsub(/"/, "", $2); if ($2 != "*" && $2+0 > m) m=$2+0} END{print m+0}' \
+            /var/local/emhttp/disks.ini)
+    fi
+    local h
+    for h in /sys/class/hwmon/hwmon*; do
+        [ "$(cat "$h/name" 2>/dev/null)" = "coretemp" ] || continue
+        local f val mx=0
+        for f in "$h"/temp*_input; do
+            val=$(cat "$f" 2>/dev/null) || continue
+            val=$((val / 1000))
+            (( val > mx && val < 120 )) && mx=$val
+        done
+        (( mx > 0 )) && cpu=$mx
+        break
+    done
+    L1="Disk:${max_d:-0}C"
+    L2="CPU:${cpu:---}C"
+}
+
+screen_array() {
+    L1="Array Status:"
+    local st=""
+    if [ -f /var/local/emhttp/var.ini ]; then
+        st=$(sed -n 's/^mdState="\?\([^"]*\)"\?$/\1/p' /var/local/emhttp/var.ini)
+    fi
+    case "$st" in
+        STARTED)  L2="Started" ;;
+        STOPPED)  L2="Stopped" ;;
+        *RECON*)  L2="Rebuilding" ;;
+        *)        L2="${st:-Unknown}" ;;
+    esac
+}
+
+screen_time() {
+    L1=$(date '+%H:%M:%S')
+    local secs
+    secs=$(awk '{print int($1)}' /proc/uptime 2>/dev/null) || secs=0
+    local d=$((secs/86400)) h=$(( (secs%86400)/3600 )) m=$(( (secs%3600)/60 ))
+    if (( d > 0 )); then
+        L2="Up ${d}d ${h}h ${m}m"
+    else
+        L2="Up ${h}h ${m}m"
+    fi
+}
+
+screen_fan() {
+    # Read the fan directly from the IT87/NCT hwmon chip (read-only).
+    # Fan control itself lives in FanCtrl Plus since 2026.05.29b.
+    local h name hw="" pwm="" rpm=""
+    for h in /sys/class/hwmon/hwmon*; do
+        name=$(cat "$h/name" 2>/dev/null)
+        case "$name" in it8*|nct*) hw=$h; break;; esac
+    done
+    if [ -n "$hw" ]; then
+        pwm=$(cat "$hw/pwm1" 2>/dev/null)
+        rpm=$(cat "$hw/fan1_input" 2>/dev/null)
+    fi
+    if [[ "$pwm" =~ ^[0-9]+$ ]]; then
+        L1="Fan: $(( pwm * 100 / 255 ))% ($pwm)"
+    else
+        L1="Fan: no hwmon"
+    fi
+    if [[ "$rpm" =~ ^[0-9]+$ ]]; then
+        L2="${rpm} RPM"
+    else
+        L2="RPM unknown"
+    fi
+}
+
+# --- Main ---
+
+# Prevent multiple instances via flock
+exec 9>"$PIDFILE.lock"
+flock -n 9 || { echo "Another asustor-lcd instance is running." >&2; exit 1; }
+
+# Kill stale instance if PID file exists
+if [ -f "$PIDFILE" ]; then
+    old_pid=$(cat "$PIDFILE" 2>/dev/null)
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+        kill "$old_pid" 2>/dev/null
+        sleep 1
+    fi
+fi
+
+echo $$ > "$PIDFILE"
+
+enabled=$(cfg enabled true)
+PORT=$(cfg port /dev/ttyS1)
+cycle=$(cfg cycle_interval 5)
+screens_str=$(cfg screens "hostname,ip,temps,array,time")
+
+if [ "$enabled" != "true" ]; then
+    echo "LCD disabled in config." >&2
+    exit 0
+fi
+
+if [ ! -c "$PORT" ]; then
+    echo "Serial port $PORT not found." >&2
+    exit 1
+fi
+
+stty -F "$PORT" 115200 cs8 -parenb -cstopb raw -echo -ixon -ixoff -crtscts 2>/dev/null
+exec 3>"$PORT"
+
+mkdir -p "$(dirname "$STATE")"
+echo "asustor-lcd started on $PORT" >&2
+
+# Flush MCU to recover from stuck state (per lcm reference)
+send_msg $FUNC_FLUSH 0
+send_msg $FUNC_FLUSH 0
+
+# Power on, clear
+send_msg $FUNC_DISPLAY 1
+send_msg $FUNC_CLEAR 1
+
+screen_idx=0
+
+while $RUNNING; do
+    cycle=$(cfg cycle_interval 5)
+    IFS=',' read -ra screen_list <<< "$(cfg screens "$screens_str")"
+    local_count=${#screen_list[@]}
+
+    if (( local_count == 0 )); then
+        sleep 1
+        continue
+    fi
+
+    name="${screen_list[$((screen_idx % local_count))]}"
+    name="${name// /}"
+    L1="" L2=""
+
+    case "$name" in
+        hostname) screen_hostname ;;
+        ip)       screen_ip ;;
+        temps)    screen_temps ;;
+        array)    screen_array ;;
+        time)     screen_time ;;
+        fan)      screen_fan ;;
+    esac
+
+    [ -n "$L1" ] && write_lcd "$L1" "$L2"
+    screen_idx=$(( (screen_idx + 1) % local_count ))
+
+    cat > "$STATE" << EOF
+{
+  "timestamp": "$(date +%Y-%m-%dT%H:%M:%S%z)",
+  "current_screen": "$name",
+  "line1": "$L1",
+  "line2": "$L2",
+  "port": "$PORT",
+  "screens": "$(IFS=,; echo "${screen_list[*]}")"
+}
+EOF
+
+    for (( i=0; i<cycle; i++ )); do
+        $RUNNING || break
+        sleep 1
+    done
+done
+
+cleanup

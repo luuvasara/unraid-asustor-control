@@ -1,0 +1,36 @@
+name: Hardware report
+description: An Asustor unit the plugin does not recognise, or an LCD, LED or sensor that does not work.
+title: "Hardware report: "
+labels: ["hardware-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please remove serial numbers, MAC addresses, hostnames and IP addresses from anything you paste below.
+  - type: input
+    id: model
+    attributes:
+      label: Asustor model
+      description: As printed on the label, e.g. "AS6706T (Lockerstor 6 Gen2)".
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Unraid and plugin versions
+      description: e.g. "Unraid 7.3.4, asustor-control 2026.10.26a, Asustor Platform Drivers 2026.10.21".
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is missing or wrong?
+      description: e.g. "the LCD stays blank", "no fan RPM on the Status tab", "the status LED does not light".
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware details
+      description: Output of `lsmod | grep -i -e asustor -e it87`, `ls /sys/class/hwmon/*/name | xargs cat`, `ls -l /dev/ttyS*` and the last lines of /var/log/asustor-lcd.log and /var/log/asustor-hwmon.log.
+      render: text

@@ -1,0 +1,133 @@
+/* Asustor Control — minimal CSS, inherits Unraid theme */
+
+/* Tabs: markup uses Unraid's native .tabs / button[role=tab] component
+   (webGui default-base.css) so every theme styles them. Only the panel
+   show/hide lives here. */
+.ac-tab-content { display: none; }
+.ac-tab-content.active { display: block; }
+
+/* Status bar */
+.ac-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    color: #fff;
+    font-size: 13px;
+}
+.ac-status-ok { background: #2d7a3a; }
+.ac-status-warning { background: #b8860b; }
+.ac-status-error { background: #c0392b; }
+.ac-status-bar .ac-version { margin-left: auto; opacity: 0.7; font-size: 12px; }
+
+/* Status dots */
+.ac-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+.ac-dot-green { background: #27ae60; }
+.ac-dot-red { background: #c0392b; }
+.ac-dot-grey { background: #999; }
+
+/* PWM bar */
+.ac-pwm-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--border-color, #ccc);
+    overflow: hidden;
+    min-width: 120px;
+    max-width: 200px;
+}
+.ac-pwm-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: #2d7a3a;
+    transition: width 0.5s ease;
+}
+
+/* Temperature color classes */
+.ac-hot { color: #e74c3c !important; font-weight: bold; }
+.ac-warm { color: #f39c12 !important; }
+.ac-cool { color: #27ae60 !important; }
+
+/* LCD preview */
+.ac-lcd-preview {
+    background: #001a00;
+    color: #33ff33;
+    font-family: "Courier New", monospace;
+    font-size: 18px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    border: 2px solid #004400;
+    text-align: left;
+    line-height: 1.8;
+    letter-spacing: 2px;
+    min-height: 60px;
+    display: inline-block;
+}
+
+/* Fan history chart canvas */
+.ac-fan-curve {
+    width: 100%;
+    height: 180px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    margin-top: 8px;
+}
+
+/* Chart legend */
+.ac-legend {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--alt-text-color);
+    margin-top: 6px;
+}
+
+/* Action buttons */
+.ac-btn {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #fff;
+    margin-right: 6px;
+}
+.ac-btn-primary { background: #2d7a3a; }
+.ac-btn-primary:hover { background: #3a9a4a; }
+.ac-btn-danger { background: #c0392b; }
+.ac-btn-danger:hover { background: #e04335; }
+.ac-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Mode badges (used by LCD screen names etc.) */
+.ac-mode-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+/* Driver-missing banner (all tabs) and in-tab notes */
+.ac-banner {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px 14px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.ac-banner .fa { font-size: 18px; margin-top: 2px; }
+.ac-banner-error { background: #c0392b; }
+.ac-banner-warn { background: #b8860b; }
+.ac-muted { opacity: 0.6; }

@@ -1,0 +1,84 @@
+#!/bin/bash
+# asustor-drivercheck [--notify] - are the Asustor kernel drivers there for the running kernel?
+#
+# Writes $STATE_DIR/drivers.json (read by the plugin page and asustor-hwmon) and prints one line.
+# Exit 0 = all required drivers loaded, 1 = something required is missing.
+# With --notify, a problem raises ONE Unraid notification per boot (keyed on the boot id).
+#
+# Required (from the Asustor Platform Driver plugin, a per-kernel build):
+#   asustor (LED/button platform devices), asustor_it87 (fan/temperature sensor),
+#   asustor_gpio_it87 (the GPIO lines behind the LEDs and buttons).
+# Optional (this plugin's LED/button add-on, only when enabled in leds.cfg):
+#   leds_gpio, gpio_keys_polled.
+# The usual cause of "missing" is an Unraid update whose kernel has no matching driver build yet.
+#
+# ASUSTOR_SYSROOT prefixes every absolute path and ASUSTOR_KVER replaces `uname -r` (test hooks).
+
+R="${ASUSTOR_SYSROOT:-}"
+STATE_DIR="$R/var/local/emhttp/plugins/asustor-control"
+OUT="$STATE_DIR/drivers.json"
+CFG="$R/boot/config/plugins/asustor-control/leds.cfg"
+NOTIFY="${ASUSTOR_NOTIFY:-$R/usr/local/emhttp/webGui/scripts/notify}"
+KV="${ASUSTOR_KVER:-$(uname -r)}"
+REQUIRED="asustor asustor_it87 asustor_gpio_it87"
+OPTIONAL="leds_gpio gpio_keys_polled"
+
+mkdir -p "$STATE_DIR"
+
+installed() {                   # $1 module name: is a .ko for the running kernel on disk?
+    local f
+    for f in "$R/lib/modules/$KV"/kernel/drivers/*/"$1".ko* "$R/lib/modules/$KV"/kernel/drivers/*/*/"$1".ko* \
+             "$R/lib/modules/$KV"/extra/"$1".ko* "$R/lib/modules/$KV"/updates/"$1".ko*; do
+        [ -e "$f" ] && return 0
+    done
+    return 1
+}
+cfg_get() {                     # $1 key, $2 default
+    local k v
+    [ -f "$CFG" ] && while IFS='=' read -r k v; do
+        [ "$k" = "$1" ] && { v=${v%%#*}; v=${v//\"/}; echo "${v// /}"; return; }
+    done < "$CFG"
+    echo "$2"
+}
+json_list() { local o="" x; for x in "$@"; do o="$o${o:+,}\"$x\""; done; echo "[$o]"; }
+
+missing=(); not_installed=(); opt_missing=()
+for m in $REQUIRED; do
+    [ -d "$R/sys/module/$m" ] && continue
+    missing+=("$m"); installed "$m" || not_installed+=("$m")
+done
+if [ "$(cfg_get kmods no)" = "yes" ]; then
+    for m in $OPTIONAL; do [ -d "$R/sys/module/$m" ] || opt_missing+=("$m"); done
+fi
+
+if [ ${#missing[@]} -eq 0 ]; then
+    state=ok
+    if [ ${#opt_missing[@]} -gt 0 ]; then
+        state=warn
+        msg="LED/button add-on enabled but not loaded on kernel $KV (missing: ${opt_missing[*]}). LEDs and buttons keep their firmware state."
+    else
+        msg="Asustor drivers loaded on kernel $KV."
+    fi
+elif [ ${#not_installed[@]} -gt 0 ]; then
+    state=missing
+    msg="Asustor kernel drivers missing for kernel $KV (not installed: ${not_installed[*]}). Fan readings, LEDs and buttons are unavailable. The Asustor Platform Driver plugin probably has no build for this Unraid kernel yet: check that plugin (Plugins page), then reboot once it has one."
+else
+    state=missing
+    msg="Asustor kernel drivers installed for kernel $KV but not loaded (${missing[*]}). A reboot normally loads them; see the system log for errors."
+fi
+
+printf '{"state":"%s","kernel":"%s","missing":%s,"not_installed":%s,"optional_missing":%s,"message":"%s","checked":%s}\n' \
+    "$state" "$KV" "$(json_list "${missing[@]}")" "$(json_list "${not_installed[@]}")" \
+    "$(json_list "${opt_missing[@]}")" "${msg//\"/}" "$(date +%s)" > "$OUT.tmp" && mv "$OUT.tmp" "$OUT"
+echo "drivers: $state - $msg"
+
+if [ "$1" = "--notify" ] && [ "$state" = "missing" ]; then
+    boot=$(cat "$R/proc/sys/kernel/random/boot_id" 2>/dev/null || echo unknown)
+    mark="$STATE_DIR/drivers-notified"
+    if [ "$(cat "$mark" 2>/dev/null)" != "$boot" ]; then
+        echo "$boot" > "$mark"
+        [ -x "$NOTIFY" ] && "$NOTIFY" -e "Asustor Control" -s "Asustor drivers missing on kernel $KV" \
+            -d "$msg" -i alert -l "/Utilities/AsustorControl" >/dev/null 2>&1
+    fi
+fi
+[ "$state" != "missing" ]

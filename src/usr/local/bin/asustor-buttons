@@ -1,0 +1,118 @@
+#!/bin/bash
+# asustor-buttons: front-panel button actions for Asustor NAS units on Unraid.
+#
+# gpio-keys-polled turns the asustor platform driver's button GPIOs into the input device
+# "asustor-keys". On the AS6706T that is the USB Copy button (KEY_COPY); the power button is
+# handled by ACPI as usual and never shows up here.
+#
+# One `od` child blocks on /dev/input/eventN (no polling, no CPU while idle); each press is
+# timed and mapped to an action from leds.cfg:
+#   copy_short=<action>   copy_long=<action>   long_press_s=3
+#   action: none | log (default) | notify | locate (blink every bay's red LED 30 s) |
+#           script (bash /boot/config/plugins/asustor-control/button-copy-<short|long>.sh)
+# There is deliberately no shutdown/reboot action: a script you write yourself is the only
+# way to make a button do that.
+#
+# ASUSTOR_SYSROOT prefixes every absolute path; ASUSTOR_BUTTON_DEV names an event file to read
+# instead of discovering one; ASUSTOR_ONESHOT=1 processes the file to EOF and exits (test hooks).
+
+R="${ASUSTOR_SYSROOT:-}"
+CFG="$R/boot/config/plugins/asustor-control/leds.cfg"
+CFGDIR="$R/boot/config/plugins/asustor-control"
+STATE_DIR="$R/var/local/emhttp/plugins/asustor-control"
+ACTION_LOG="$STATE_DIR/action.log"
+STATE="$STATE_DIR/buttons.json"
+PIDFILE="$R/var/run/asustor-buttons.pid"
+FIFO="$R/var/run/asustor-buttons.tick"
+NOTIFY="${ASUSTOR_NOTIFY:-$R/usr/local/emhttp/webGui/scripts/notify}"
+KEY_COPY=133; EV_KEY=1
+
+cfg_get() {
+    local k v
+    [ -f "$CFG" ] && while IFS='=' read -r k v; do
+        [ "$k" = "$1" ] && { v=${v%%#*}; v=${v//\"/}; echo "${v// /}"; return; }
+    done < "$CFG"
+    echo "$2"
+}
+action_log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$ACTION_LOG"; }
+mkdir -p "$STATE_DIR" "$(dirname "$PIDFILE")"
+
+find_dev() {                   # /dev/input/eventN of "asustor-keys", or fail
+    local e n
+    for e in "$R"/sys/class/input/event*; do
+        read -r n < "$e/device/name" 2>/dev/null || continue
+        [ "$n" = "asustor-keys" ] && { echo "$R/dev/input/${e##*/}"; return 0; }
+    done
+    return 1
+}
+
+run_action() {                 # $1 button name, $2 short|long, $3 held ms
+    local key="${1}_$2" act
+    act=$(cfg_get "$key" log)
+    case "$act" in
+        none) ;;
+        log) action_log "Button: $1 $2 press (${3} ms)" ;;
+        notify) action_log "Button: $1 $2 press -> notify"
+                [ -x "$NOTIFY" ] && "$NOTIFY" -e "Asustor Control" -s "$1 button: $2 press" -d "Front panel $1 button pressed (${3} ms)" -i normal >/dev/null 2>&1 ;;
+        locate) action_log "Button: $1 $2 press -> locate all bays"
+                echo "0 30" > "$STATE_DIR/locate.req" ;;
+        script) local s="$CFGDIR/button-$1-$2.sh"
+                if [ -f "$s" ]; then action_log "Button: $1 $2 press -> running $s"
+                    ( bash "$s" "$1" "$2" "$3" >> "$R/var/log/asustor-buttons.log" 2>&1 9>&- 7<&- & )
+                else action_log "Button: $1 $2 press -> script $s not found"; fi ;;
+        *) action_log "Button: $1 $2 press -> unknown action '$act' in leds.cfg, ignored" ;;
+    esac
+    LAST="$1 $2 ${3}ms $act"
+    printf '{"device":"%s","last":"%s","ts":%s}\n' "$DEV" "$LAST" "$EPOCHSECONDS" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+}
+
+handle_events() {              # reads od lines (12 x u16 per struct input_event) from fd 7
+    local -a w; local t0="" ms long_ms
+    long_ms=$(( $(cfg_get long_press_s 3) * 1000 ))
+    while read -r -u 7 -a w; do
+        (( ${#w[@]} == 12 )) || continue
+        [ "${w[8]}" = "$EV_KEY" ] && [ "${w[9]}" = "$KEY_COPY" ] || continue
+        if [ "${w[10]}" = 1 ]; then
+            t0=$(( w[0] + (w[1] << 16) )).$(printf '%06d' $(( w[4] + (w[5] << 16) )))
+        elif [ "${w[10]}" = 0 ] && [ -n "$t0" ]; then
+            local t1=$(( w[0] + (w[1] << 16) )).$(printf '%06d' $(( w[4] + (w[5] << 16) )))
+            ms=$(( (${t1%.*} - ${t0%.*}) * 1000 + (10#${t1#*.} - 10#${t0#*.}) / 1000 ))
+            if (( ms >= long_ms )); then run_action copy long "$ms"; else run_action copy short "$ms"; fi
+            t0=""
+        fi
+    done
+}
+
+if [ -z "${ASUSTOR_ONESHOT:-}" ]; then
+    exec 9>"$PIDFILE.lock"
+    flock -w 15 9 || { echo "Another asustor-buttons instance is running." >&2; exit 1; }
+    echo $$ > "$PIDFILE"
+fi
+OD_PID=""; HE_PID=""
+on_term() {
+    [ -n "$OD_PID" ] && kill "$OD_PID" 2>/dev/null
+    [ -n "$HE_PID" ] && kill "$HE_PID" 2>/dev/null
+    [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"
+    exit 0
+}
+trap on_term INT TERM
+
+if [ -n "${ASUSTOR_BUTTON_DEV:-}" ]; then DEV=$ASUSTOR_BUTTON_DEV
+elif ! DEV=$(find_dev); then
+    echo "asustor-buttons: no asustor-keys input device (gpio_keys_polled not loaded?), nothing to do" >&2
+    printf '{"device":"","last":"","ts":%s}\n' "$EPOCHSECONDS" > "$STATE"
+    exit 0
+fi
+echo "asustor-buttons started: $DEV, copy_short=$(cfg_get copy_short log) copy_long=$(cfg_get copy_long log)" >&2
+printf '{"device":"%s","last":"","ts":%s}\n' "$DEV" "$EPOCHSECONDS" > "$STATE"
+# The u16 decode assumes x86_64's 24-byte struct input_event (timeval 16 B, type, code, value).
+exec 7< <(exec od -An -v -tu2 -w24 "$DEV" 9>&-)
+OD_PID=$!
+handle_events &                 # in the background so a TERM is handled at once
+HE_PID=$!
+wait $HE_PID
+[ -n "${ASUSTOR_ONESHOT:-}" ] && exit 0
+echo "asustor-buttons: event stream ended (device removed?)" >&2
+kill "$OD_PID" 2>/dev/null
+[ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ] && rm -f "$PIDFILE"
+exit 1

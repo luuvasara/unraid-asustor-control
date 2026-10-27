@@ -1,0 +1,233 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "asustor-control">
+  <!ENTITY author    "unraid-asustor-control project">
+  <!ENTITY version   "2026.10.27d">
+  <!ENTITY gitURL    "https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main">
+  <!ENTITY pluginURL "&gitURL;/asustor-control.plg">
+  <!ENTITY pkg       "asustor-control-&version;-x86_64-1.txz">
+  <!ENTITY pkgURL    "&gitURL;/packages/&pkg;">
+  <!ENTITY md5       "cfc89dc2d092acbf5b53065ebc448579">
+]>
+<!-- LCD, front-panel LEDs/buttons and hardware monitoring for Asustor NAS units running Unraid.
+     Install: Plugins, Install Plugin, https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main/asustor-control.plg
+     (or plugin install <that URL>); the package is downloaded from packages/ in the same repository and
+     MD5-checked. Bump &version; on EVERY change. &md5; is filled in by build.sh from the built txz. -->
+<PLUGIN name="&name;" author="&author;" version="&version;" min="6.12.0" launch="Utilities/AsustorControl" pluginURL="&pluginURL;">
+
+<CHANGES>
+###2026.10.27d
+- Front-panel LEDs: per-bay disk activity (blinks on I/O) and fault LEDs (Unraid marks the disk disabled/invalid or with read errors), status LED follows the array (steady = started, slow blink = parity check/rebuild, fast blink = stopped; red = a disk is disabled, invalid or missing). Bays map to the ASM1166 SATA ports; override on the new LEDs &amp; Buttons tab.
+- Locate: blink one bay's (or every bay's) red LED for 30 s from the LEDs &amp; Buttons tab
+- USB Copy button: configurable short/long press action (log, notification, locate, own script); default log only, no built-in shutdown
+- Optional LED/button driver add-on: Unraid's kernel lacks leds-gpio and gpio-keys-polled, so the add-on installs them (plus LED triggers) for exactly the running kernel and refuses on a kernel it has no build for. First build: 6.18.58-Unraid (Unraid 7.3.4). Temporary until the Asustor Platform Drivers plugin (Terebi42) merges the same modules (https://github.com/Terebi42/unraid-asustor-pfd/pull/1); when that package provides leds-gpio and gpio_keys_polled for the running kernel, the add-on uses them and installs nothing of its own. Package: root:root, dirs 755, files 644.
+- Driver watchdog: when the Asustor kernel drivers are missing (e.g. after an Unraid update with no matching Asustor Platform Driver build) the page shows a red banner, Unraid raises one notification per boot, and the hardware monitor records it in the Action Log and stays up instead of exiting
+
+###2026.10.27c
+- Behaviour log retention no longer uses find on the log dir path: it runs in the same perl helper as the writes, in the hwlog dir pinned through O_NOFOLLOW|O_DIRECTORY fds, and removes only regular files (lstat) named hwlog-YYYY-MM-DD.csv / pwm-events-YYYY-MM-DD.log older than 30 days. A log dir swapped to a symlink is refused, so nothing outside it can be deleted. Tests: retention keeps symlinks, other names and today's file; a decoy dir behind a swapped-in symlink stays untouched.
+
+###2026.10.27b
+- Behaviour log hardening, race-free: the day and events files are opened with O_NOFOLLOW (perl sysopen), each directory from appdata down with O_NOFOLLOW|O_DIRECTORY and the next one through the previous directory's fd, so a symlink planted or swapped in at any moment, including between a check and the write, is never followed. An existing log dir is no longer chown/chmod-ed (mode 755 only when the daemon creates it). On a refusal the rows stay buffered and the Action Log gets one warning. Tests cover planted and raced-in symlinks on the day file, the events file, the hwlog dir and its parent.
+
+###2026.10.27a
+- Behaviour log: symlink checks on the log dir and day files (superseded by 2026.10.27b); process names from /proc are reduced to [A-Za-z0-9._-] before they are logged. (Never released on its own.)
+- README: screenshots of both tabs (made-up data, rendered in the new offline harness tests/harness/), known limits (front LEDs and buttons, missing driver build after an Unraid update), credits up front.
+
+###2026.10.26a
+- Published: install and update from GitHub (https://github.com/luuvasara/unraid-asustor-control). The .plg now has a pluginURL, so Unraid's update check sees new versions; the package is downloaded from the repository's packages/ folder and checked against its MD5 before it is installed. No change in what the plugin does.
+
+###2026.09.23a
+- Behaviour log gains a whole-system cpu_busy_pct column (from /proc/stat), and PWM-change lines carry it too
+- PWM-change lines show the TCP peer of a named process (e.g. smbd and the SMB client address), since the 15-char process name truncates Samba's client tag
+- No more "sort: write error" noise in the daemon log after each event
+
+###2026.09.21i
+- PWM-change lines always name the top CPU consumer from 1% (second entry from 5%), so small bursts that still move the fan are visible
+
+###2026.09.21h
+- (supersedes 21g, never installed) a child reaped inside the window no longer inflates its parent CPU figure; such lines are marked "+reaped child, not counted"
+
+###2026.09.21g
+- PWM-change attribution looks back over the last 60 s (FanCtrl Plus polls once a minute, so the heat source is up to a minute before the change), and charges exited helper processes to their parent so short bursts are not lost
+
+###2026.09.21f
+- Fix hwmon daemon failing to start after an upgrade: the previous instance's background sleep held the lock fd for up to 10 s and the new instance gave up immediately. The sleep child no longer inherits the lock, the daemon waits up to 15 s for it, and the rc script now reports (Action Log + install output) if a daemon dies right after start instead of silently succeeding.
+
+###2026.09.21e
+- (supersedes 21d, never installed) process scan tolerates PIDs exiting mid-scan, docker ps bounded by a 3 s timeout, event buffer capped
+
+###2026.09.21d
+- Every PWM change is written to the Action Log with what FanCtrl Plus reacted to (CPU or disk, the temperature, the hottest drive) and the processes that used the most CPU time and I/O in the 10 s before the change, with their Docker container. Same events go to appdata hwlog/pwm-events-YYYY-MM-DD.log (30-day retention).
+
+###2026.09.21c
+- Behaviour logger: asustor-hwmon now samples every 10 s (PWM, RPM, CPU package/core temps, CPU clock, throttle counter, FanCtrl Plus' chosen temp+source, per-NVMe and per-disk temps), buffers in RAM and appends to /mnt/user/appdata/asustor-control/hwlog/hwlog-YYYY-MM-DD.csv every 5 min, 30-day retention. Chart CSV unchanged (30 s).
+- Status tab shows the log's file count, size, last write and any write error
+- Fix duplicate hwmon daemons after a restart: the old instance's deferred TERM handler deleted the new instance's pid file. Daemons now handle TERM immediately, only remove their own pid file, and the rc stop sweeps strays.
+- tools/hwlog-report.py: offline analysis of the behaviour log (run on a workstation)
+
+###2026.09.21b
+- Tabs use Unraid's native tab component, so the black/gray/azure themes style them (active tab was white with light text on dark themes)
+- Chart axis labels, gridlines and RPM series take their colours from the active theme
+
+###2026.09.21a
+- LCD fan screen reads the hwmon chip directly (was stuck on "No data" since fan control moved to FanCtrl Plus)
+- Remove script now also removes asustor-hwmon, its logs and pid files
+- Pre-install cleans stale asustor-control.plg copy and obsolete fanctl.ini from the flash data dir
+- build.sh: static files 644, executables 755 (were group-writable)
+
+###2026.05.29c
+- Add persistent hardware monitor daemon (sysfs poller, CSV history survives page reload)
+
+###2026.05.29b
+- Strip fan control — use FanCtrl Plus instead. Plugin now provides LCD/LED control and hardware monitoring only.
+
+###2026.05.29a
+- Fix boot failure: preserve current txz on flash during pre-install cleanup
+
+###2026.05.28a
+- Remove bundled kernel modules — use Terebi42/unraid-asustor-pfd plugin instead
+- Kernel modules auto-update on Unraid upgrades via ich777 builds
+- Plugin now ships userspace only: fanctl, LCD, LED, WebGUI
+
+###2026.05.17c
+- Clean up old .txz versions from flash on upgrade (prevent accumulation)
+- Fix boot: load hwmon-vid dependency + run depmod before asustor_it87
+- Rebuild kernel modules for 6.12.87-Unraid (was 6.12.85, broke after kernel update)
+
+###2026.05.12f
+- Fix timezone: strip \r from ident.cfg, handle Kiev→Kyiv zoneinfo rename
+- LCD preview: left-align to match real LCD
+- Fix LCD fan screen RPM parsing (stray } from JSON)
+
+###2026.05.12c
+- Defaults: low_temp=55, high_temp=65, cpu_weight=0 (match proven fanspeed script)
+- Log TEMP WARNING when any drive exceeds Unraid warn threshold
+
+###2026.05.12b
+- Exclude NVMe temps from HDD fan curve (separate thresholds)
+- Extract stop_daemon() in rc.d, move mkdir to daemon startup
+- LCD screen_fan: single awk instead of 3 sed calls
+- Fix drawFanCurve JS defaults to use Unraid thresholds
+- Deduplicate getFanConfig dynamix.cfg parsing
+
+###2026.05.12a
+- Fix chart hover padding mismatch on dual Y-axis
+- Trim action.log from daemon writes (cap 200 lines)
+- Unify config defaults across daemon/PHP/JS (cpu_weight=0.2)
+- Support nct* hwmon chips alongside it8*
+
+###2026.05.12
+- Dual Y-axis chart: left axis °C (temps), right axis PWM (0-255)
+- PWM/mode changes logged to Action Log
+- Chart scale labels with units
+
+###2026.05.11g
+- Fix fan oscillation: disable conflicting fanspeed userscript, re-assert PWM every 5s
+
+###2026.05.11f
+- Fix fan oscillation: re-assert PWM every 10s to prevent SmartGuardian override
+- Chart legend tooltips, action log from rc.d events
+- Improved stop reliability (wait for process exit)
+
+###2026.05.11e
+- WebGUI: fan speed history chart, live LCD preview, action log
+- Add hysteresis and ramp_step to WebGUI fan config
+- Tune default fan curve: wider range (35-60), lower cpu_weight (0.3)
+
+###2026.05.11d
+- Green status LED: solid ON via IT8625E GP47 Simple I/O + GPIO control
+- Add led_on/led_off commands to rc.d service script
+
+###2026.05.11c
+- Rewrite fanctl and LCD daemons in pure bash (no Python/pyserial dependency)
+- Fix txz directory permissions (755 safety check in build.sh)
+
+###2026.05.11b
+- Bundle all 3 kernel modules (add asustor.ko for LED/button support)
+- Add build-from-source script (build-modules.sh)
+- Fix module load order: gpio -> hwmon -> platform
+
+###2026.05.11a
+- Initial release
+- Fan control daemon: linear curve, SMART temps, parity/spindown modes
+- LCD daemon: Asustor serial protocol, 6 info screens, configurable rotation
+- WebGUI settings page with live status, fan curve visualization
+- Includes asustor_it87 and asustor_gpio_it87 kernel modules
+</CHANGES>
+
+<!--
+Pre-install: ensure config directory and load kernel modules.
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+echo "Installing Asustor Control..."
+mkdir -p /boot/config/plugins/asustor-control
+mkdir -p /var/local/emhttp/plugins/asustor-control
+# Remove old package versions, keep current
+rm -f $(ls /boot/config/plugins/asustor-control/asustor-control-*-x86_64-1.txz 2>/dev/null | grep -v '&version;')
+# Stale leftovers from earlier deploy flows / stripped fan control
+rm -f /boot/config/plugins/asustor-control/asustor-control.plg
+rm -f /boot/config/plugins/asustor-control/fanctl.ini
+</INLINE>
+</FILE>
+
+<!--
+Install the plugin package.
+-->
+<FILE Name="/boot/config/plugins/&name;/&pkg;" Run="upgradepkg --install-new --reinstall">
+<URL>&pkgURL;</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<!--
+Post-install: set permissions, load modules, start daemons.
+-->
+<FILE Run="/bin/bash">
+<INLINE>
+chmod +x /usr/local/bin/asustor-lcd
+chmod +x /usr/local/bin/asustor-hwmon
+chmod +x /usr/local/bin/asustor-leds /usr/local/bin/asustor-buttons /usr/local/bin/asustor-drivercheck /usr/local/bin/asustor-kmods
+chmod +x /etc/rc.d/rc.asustor-control
+
+# Clean up old fan control daemon from previous versions
+rm -f /usr/local/bin/asustor-fanctl 2>/dev/null
+rm -f /var/run/asustor-fanctl.pid 2>/dev/null
+rm -f /var/run/asustor-fanctl.pid.lock 2>/dev/null
+
+# Clean up old bundled modules from previous versions
+rm -f /lib/modules/*/extra/asustor*.ko.xz 2>/dev/null
+
+# Start daemons
+/etc/rc.d/rc.asustor-control restart
+
+echo "Asustor Control installed."
+</INLINE>
+</FILE>
+
+<!--
+Remove script.
+-->
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+echo "Removing Asustor Control..."
+# Note: the behaviour log under /mnt/user/appdata/asustor-control is user data and is kept.
+/etc/rc.d/rc.asustor-control stop 2>/dev/null
+removepkg asustor-control-&version;-x86_64-1 2>/dev/null
+rm -f /usr/local/bin/asustor-lcd /usr/local/bin/asustor-hwmon
+rm -f /usr/local/bin/asustor-leds /usr/local/bin/asustor-buttons /usr/local/bin/asustor-drivercheck /usr/local/bin/asustor-kmods
+rm -f /var/run/asustor-lcd.pid /var/run/asustor-lcd.pid.lock
+rm -f /var/run/asustor-hwmon.pid /var/run/asustor-hwmon.pid.lock
+rm -f /var/run/asustor-leds.pid /var/run/asustor-leds.pid.lock /var/run/asustor-leds.tick
+rm -f /var/run/asustor-buttons.pid /var/run/asustor-buttons.pid.lock /var/run/asustor-buttons.tick
+rm -f /var/log/asustor-lcd.log /var/log/asustor-hwmon.log /var/log/asustor-leds.log /var/log/asustor-buttons.log
+# The LED/button modules stay loaded until reboot (unloading leaves the LEDs in their last state);
+# the package is removed so they are not loaded again.
+for p in /var/log/packages/asustor-ledkeys-kmod-*; do [ -e "$p" ] || continue; removepkg "${p##*/}" >/dev/null 2>/dev/null; done
+rm -rf /usr/local/emhttp/plugins/asustor-control
+rm -f /etc/rc.d/rc.asustor-control
+rm -rf /var/local/emhttp/plugins/asustor-control
+echo "Asustor Control removed."
+</INLINE>
+</FILE>
+
+</PLUGIN>
