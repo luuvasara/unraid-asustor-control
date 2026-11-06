@@ -1,0 +1,55 @@
+Menu="AsustorControl:1"
+Title="LCD Settings"
+Tag="tv"
+Markdown="false"
+---
+<div id="tab-lcd">
+
+    <dl>
+        <dt>LCD enabled:</dt>
+        <dd><select id="cfg-lcd-enabled">
+            <option value="true">Yes</option>
+            <option value="false">No</option>
+        </select></dd>
+    </dl>
+    <blockquote class="inline_help">
+        Enable or disable the LCD display daemon.
+    </blockquote>
+
+    <dl>
+        <dt>Serial port:</dt>
+        <dd><input type="text" id="cfg-lcd-port" value="/dev/ttyS1" size="20"></dd>
+    </dl>
+    <blockquote class="inline_help">
+        Serial device for the Asustor LCD panel. Usually /dev/ttyS1.
+    </blockquote>
+
+    <dl>
+        <dt>Cycle interval:</dt>
+        <dd><input type="number" id="cfg-lcd-cycle" min="1" max="60" value="5" size="5"> seconds</dd>
+    </dl>
+    <blockquote class="inline_help">
+        Time in seconds between LCD screen rotations.
+    </blockquote>
+
+    <dl>
+        <dt>Screen rotation:</dt>
+        <dd>
+            <label><input type="checkbox" id="scr-hostname" checked> Hostname</label><br>
+            <label><input type="checkbox" id="scr-ip" checked> IP Address</label><br>
+            <label><input type="checkbox" id="scr-temps" checked> Temperatures</label><br>
+            <label><input type="checkbox" id="scr-array" checked> Array Status</label><br>
+            <label><input type="checkbox" id="scr-time" checked> Time/Uptime</label><br>
+            <label><input type="checkbox" id="scr-fan"> Fan Status</label>
+        </dd>
+    </dl>
+    <blockquote class="inline_help">
+        Select which screens to include in the LCD rotation cycle.
+    </blockquote>
+
+    <dl>
+        <dt>&nbsp;</dt>
+        <dd><button onclick="saveLcdConfig()" class="ac-btn ac-btn-primary">Apply &amp; Restart</button></dd>
+    </dl>
+
+</div>

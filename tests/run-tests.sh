@@ -30,7 +30,14 @@ else bad "missing $PKG (run ./build.sh)"; fi
 grep -q '<!ENTITY gitURL *"https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main">' "$PLG" && ok "gitURL" || bad "gitURL"
 grep -q 'pluginURL="&pluginURL;"' "$PLG" && ok "pluginURL attribute" || bad "pluginURL attribute"
 grep -q '<URL>&pkgURL;</URL>' "$PLG" && grep -q '<MD5>&md5;</MD5>' "$PLG" && ok "payload URL + MD5" || bad "payload URL/MD5"
-[ "$(ls "$HERE"/packages/*.txz 2>/dev/null | wc -l)" -eq 1 ] && ok "one package in packages/" || bad "packages/ must hold only the current package"
+[ "$(ls "$HERE"/packages/*.txz 2>/dev/null | wc -l)" -le 2 ] && ok "packages/ holds the current and the previous package at most" || bad "packages/ holds more than the current and the previous package"
+# About tab and the boot trap: the pre-install cleanup compares with &version; and keeps the current txz
+grep -q 'case $f in \*/asustor-control-&version;-x86_64-1.txz) ;;' "$PLG" && ok "pre-install keeps the current version's txz" || bad "pre-install cleanup does not keep the current txz"
+grep -q 'kit/install-notes.sh "&version;"' "$PLG" && ok "post-install prints the changes box" || bad "post-install does not call install-notes.sh"
+[ "$(sed -n '/^<CHANGES>/{n;p;q}' "$PLG")" = "###$VER" ] && ok "first <CHANGES> entry is $VER" || bad "first <CHANGES> entry is not $VER"
+[ -s "$HERE/icon.png" ] && grep -q '/main/icon.png<' "$HERE/plugins/$NAME.xml" && grep -q "<MinVer>$(sed -n 's/^.*min=\"\([^\"]*\)\".*/\1/p' "$PLG" | head -1)</MinVer>" "$HERE/plugins/$NAME.xml" && ok "icon and Community Applications template (MinVer = .plg min)" || bad "icon or template"
+LIST=$(tar -tJf "$PKG")   # not piped into grep -q: with pipefail its early exit can fail the pipeline
+grep -q "plugins/$NAME/AsustorControlAbout.page" <<<"$LIST" && ok "package holds the About page" || bad "package has no About page"
 
 # hwlog-report.py on a two-row sample (format: docs/hwlog-format.md)
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT

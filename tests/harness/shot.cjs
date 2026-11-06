@@ -1,6 +1,6 @@
 // shot.cjs <base-url> <out-dir> - screenshots of the harness page (tests/harness/serve.sh). Written 2026-10-27.
 // Viewport 1440 wide (a desktop webGui), browser time zone UTC (the fixtures are stamped in UTC), en-GB 24 h clock.
-// Shots: status.png (Status tab, whole content), lcd-settings.png (LCD Settings tab) and leds.png (LEDs & Buttons tab). The page is captured as it
+// Shots: status.png (the status tab, whole content), lcd-settings.png and leds.png: full tabs, to be cropped to single panels. The page is captured as it
 // renders; nothing is hidden or removed for the capture.
 const pc = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
 (async () => {
@@ -13,9 +13,8 @@ const pc = require(process.env.PLAYWRIGHT_CORE || 'playwright-core');
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  for (const [name, tab] of [['status', null], ['lcd-settings', 'LCD Settings'], ['leds', 'LEDs & Buttons']]) {
-    await page.goto(base + '/Utilities/AsustorControl', { waitUntil: 'networkidle' });
-    if (tab) await page.locator('[role=tab]', { hasText: tab }).first().click();
+  for (const [name, tab] of [['status', 1], ['lcd-settings', 2], ['leds', 3]]) {
+    await page.goto(base + '/Utilities/AsustorControl?tab=' + tab, { waitUntil: 'networkidle' });
     await page.waitForTimeout(1500);   // ajax answers + canvas draw
     const h = await page.evaluate(() => document.documentElement.scrollHeight);
     await page.setViewportSize({ width: 1440, height: Math.min(h + 20, 6000) });

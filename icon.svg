@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Asustor Control</title>
+  <rect x="8" y="8" width="240" height="240" rx="44" fill="#1f3b57"/>
+  <rect x="21" y="21" width="214" height="214" rx="32" fill="none" stroke="#e2601b" stroke-width="8"/>
+  <rect x="62" y="48" width="132" height="160" rx="14" fill="#ffffff"/>
+  <rect x="78" y="64" width="100" height="30" rx="4" fill="#e2601b"/>
+  <rect x="78" y="106" width="100" height="14" rx="4" fill="#1f3b57"/>
+  <rect x="78" y="130" width="100" height="14" rx="4" fill="#1f3b57"/>
+  <rect x="78" y="154" width="100" height="14" rx="4" fill="#1f3b57"/>
+  <circle cx="90" cy="188" r="6" fill="#e2601b"/>
+  <circle cx="110" cy="188" r="6" fill="#1f3b57"/>
+</svg>

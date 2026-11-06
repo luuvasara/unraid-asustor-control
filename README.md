@@ -1,3 +1,5 @@
+<img src="icon.png" width="96" alt="Asustor Control">
+
 # Asustor Control: an Unraid plugin for Asustor NAS hardware (LCD, front-panel LEDs, monitoring)
 
 This plugin stands on **[mafredri](https://github.com/mafredri)'s Asustor work**: the LCD protocol
@@ -27,7 +29,7 @@ what other units look like.
 |---|---|
 | LCD | the 16x2 front-panel LCD on `/dev/ttyS1` (Asustor's serial protocol): rotating screens with hostname, IP address, temperatures, array state, time and fan speed; screens, rotation and port are configurable on the LCD Settings tab, with a live preview |
 | Status LED | the green status LED solid on while the plugin runs (IT8625E GP47 through the Super I/O config port); with the LED/button add-on it follows the array (below) |
-| Front-panel LEDs (add-on) | per-bay activity (blinks on disk I/O, read from `/sys/block/*/stat`, never wakes a disk) and fault LEDs (Unraid marks the disk disabled/invalid or with read errors); status LED steady = array started, slow blink = parity check/rebuild, fast blink = stopped, red = a disk is disabled/invalid/missing; per-bay **Locate** blink on the LEDs &amp; Buttons tab |
+| Front-panel LEDs (add-on) | per-bay activity (blinks on disk I/O, read from `/sys/block/*/stat`, never wakes a disk) and fault LEDs (Unraid marks the disk disabled/invalid or with read errors); status LED steady = array started, slow blink = parity check/rebuild, fast blink = stopped, red = a disk is disabled/invalid/missing; per-bay **Locate** blink on the LEDs and Buttons tab |
 | USB Copy button (add-on) | short/long press actions: log (default), notification, locate, or your own script; there is no built-in shutdown |
 | Driver watchdog | when the Asustor kernel drivers are missing (typically after an Unraid update with no matching driver build yet), a red banner on the page, one Unraid notification per boot, an Action Log entry; the monitor waits for the sensor chip instead of exiting |
 | Status tab | live fan PWM/RPM, CPU and disk temperatures, a temperature and fan history chart, the action log and the health of the behaviour log; tabs and colours follow the active Unraid theme |
@@ -50,7 +52,7 @@ Nothing is written to the fan registers: the plugin only reads hwmon, except for
 - **Asustor Platform Drivers** plugin ([Terebi42/unraid-asustor-pfd](https://github.com/Terebi42/unraid-asustor-pfd)),
   which loads the `asustor`, `asustor_it87` and `asustor_gpio_it87` kernel modules built for the
   running Unraid kernel.
-- Optional **LED/button add-on** (LEDs &amp; Buttons tab, Install): Unraid's kernel has no
+- Optional **LED/button add-on** (LEDs and Buttons tab, Install): Unraid's kernel has no
   `leds-gpio` or `gpio-keys-polled` driver, so the LEDs and buttons the platform driver describes
   have no driver. The add-on installs those two modules plus LED triggers, built from unmodified
   Linux sources with Unraid's own kernel config and compiler (`kmods/`, one package per kernel,
@@ -72,7 +74,7 @@ Please use the hardware report form (Issues, New issue, Hardware report) for oth
   as `leds-gpio` and `gpio-keys-polled` platform devices, but the stock Unraid kernel ships
   neither driver, so nothing binds and `/sys/class/leds` stays empty. The add-on (LEDs &amp;
   Buttons tab) supplies both for the Unraid kernels listed in `kmods.manifest`; on any other
-  kernel it refuses, the LEDs &amp; Buttons tab says the drivers are missing and the panel keeps
+  kernel it refuses, the LEDs and Buttons tab says the drivers are missing and the panel keeps
   its firmware state. This is temporary until the Asustor Platform Drivers plugin ships the same
   modules (proposed in https://github.com/Terebi42/unraid-asustor-pfd/pull/1); from then on its copy is preferred.
 - The plugin depends on the Asustor Platform Drivers plugin having a build for the running
@@ -85,23 +87,23 @@ Please use the hardware report form (Issues, New issue, Hardware report) for oth
 
 ## Screenshots
 
-Taken in the offline render harness (`tests/harness/`) with made-up data, not on a real server:
-hostname-free, documentation-range addresses (192.0.2.0/24), invented devices and processes.
+Made-up data, one panel each.
 
-Status tab: fan PWM/RPM, CPU and drive temperatures, the LCD preview, one hour of fan history
-with a disk-driven ramp, and the Action Log naming what FanCtrl Plus reacted to and which
-process was busy.
+Hardware monitor: fan PWM and RPM, CPU and drive temperature, the behaviour log.
 
-![Status tab](docs/screenshots/status.png)
+![Hardware monitor](docs/screenshots/hardware-monitor.png)
 
-LCD Settings tab: port, rotation interval and the screens in the rotation.
+Fan history: one hour of fan, CPU and drive temperature.
 
-![LCD Settings tab](docs/screenshots/lcd-settings.png)
+![Fan history](docs/screenshots/fan-history.png)
 
-LEDs &amp; Buttons tab: the bay map (bay, disk, activity LED, fault LED, Locate), the USB Copy
-button actions and the LED/button driver add-on for the running kernel.
+LCD Settings: port, rotation interval and the screens in the rotation.
 
-![LEDs & Buttons tab](docs/screenshots/leds.png)
+![LCD Settings](docs/screenshots/lcd-settings.png)
+
+LEDs and Buttons: the bay map with activity LED, fault LED and Locate.
+
+![Bay map](docs/screenshots/leds.png)
 
 ## Install
 
@@ -122,7 +124,8 @@ is removed. The page is under **Utilities, Asustor Control**.
 Needs bash, GNU tar, xz, Python 3; PHP (CLI) for the page lint (optional).
 
     ./tests/run-tests.sh      # offline: script syntax, PHP lint, .plg/package consistency, hwlog-report.py, harness fixtures
-    ./build.sh                # version comes from asustor-control.plg; bump it on every change
+    ./tests/render-test.sh     # the four tabs in headless Chrome, all themes (needs Chrome, PHP and network the first time for the stylesheets)
+    ./build.sh                # runs kit/bin/build.sh; version comes from asustor-control.plg, bump it on every change
 
 `build.sh` builds `packages/asustor-control-<version>-x86_64-1.txz` (file modes forced, archive
 root checked, owner root), writes the package MD5 into the `.plg` and regenerates
@@ -130,7 +133,7 @@ root checked, owner root), writes the package MD5 into the `.plg` and regenerate
 
 The screenshots come from the render harness: `tests/harness/serve.sh <port>` serves the page
 with PHP's built-in server and made-up fixtures (`tests/harness/mkfixture.py`), and
-`node tests/harness/shot.cjs http://127.0.0.1:<port> docs/screenshots` captures both tabs with
+`node tests/harness/shot.cjs http://127.0.0.1:<port> docs/screenshots` captures the three tabs (cropped to one panel each for this README) with
 Chrome through playwright-core. Unraid's stylesheets and jQuery are not in this repository; point
 `WEBGUI_COPY` at a copy of an Unraid 7.x `webGui/styles` and `JQUERY` at a `jquery.min.js`.
 

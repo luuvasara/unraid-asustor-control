@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Plugin>
+  <Name>Asustor Control</Name>
+  <PluginURL>https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main/asustor-control.plg</PluginURL>
+  <Support>https://github.com/luuvasara/unraid-asustor-control/issues</Support>
+  <Project>https://github.com/luuvasara/unraid-asustor-control</Project>
+  <Icon>https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main/icon.png</Icon>
+  <Category>Tools:System</Category>
+  <MinVer>6.12.0</MinVer>
+  <License>GPL-2.0</License>
+  <ReadMe>https://github.com/luuvasara/unraid-asustor-control#readme</ReadMe>
+  <ExtraSearchTerms>asustor nas lcd led fan temperature hwmon lockerstor</ExtraSearchTerms>
+  <Overview>Drives the front-panel LCD and the LEDs of an Asustor NAS that runs Unraid, and shows and logs what the fan, the CPU and the disks are doing.
+
+- The LCD cycles through the screens you pick: hostname, IP address, temperatures, array status, time and uptime, fan.
+- Front-panel LEDs: per-bay disk activity and fault LEDs, and a status LED that follows the array. Locate blinks a bay's LED.
+- USB Copy button: a short and a long press can log, notify, locate or run your own script.
+- A hardware monitor with fan, CPU and drive temperatures, a fan history chart and a log of what the fan reacted to.
+
+It needs the kernel drivers from the Asustor Platform Drivers plugin. Fan control stays with FanCtrl Plus: this plugin has no fan curve of its own.</Overview>
+</Plugin>

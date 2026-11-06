@@ -18,8 +18,9 @@ if ($uri === '/plugins/asustor-control/include/ajax.php') {
 if ($uri === '/harness/jquery.js') { header('Content-Type: text/javascript'); readfile(getenv('JQUERY')); return true; }
 if ($uri !== '/' && $uri !== '/Utilities/AsustorControl') return false;   // static files from the work webroot
 
-$raw = file_get_contents("$P/AsustorControl.page");
-$body = explode("\n---\n", $raw, 2)[1];
+// The pages of the plugin render into one document, as Unraid does with its tabs. ?tab=1..3 shows one of them.
+$pages = ['AsustorControl', 'AsustorControlLcd', 'AsustorControlLeds'];
+$sel = max(1, min(3, (int)($_GET['tab'] ?? 1)));
 ?><!DOCTYPE html>
 <html lang="en" class="Theme--<?=$theme?>">
 <head><meta charset="utf-8"><title>Utilities/AsustorControl (local harness)</title>
@@ -32,6 +33,9 @@ $body = explode("\n---\n", $raw, 2)[1];
 </head>
 <body>
 <div id="displaybox"><div class="content">
-<?php /* runs this repository's own page body, as Unraid's PageBuilder does; local harness only */ eval('?>' . $body); ?>
+<?php /* runs this repository's own page bodies, as Unraid's PageBuilder does; local harness only */
+foreach ($pages as $i => $pg): $body = explode("\n---\n", file_get_contents("$P/$pg.page"), 2)[1]; ?>
+<section class="harness-tab" style="<?=$i + 1 === $sel ? '' : 'display:none'?>"><?php eval('?>' . $body); ?></section>
+<?php endforeach; ?>
 </div></div>
 </body></html>

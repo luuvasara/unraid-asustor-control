@@ -1,11 +1,5 @@
 /* Asustor Control — minimal CSS, inherits Unraid theme */
 
-/* Tabs: markup uses Unraid's native .tabs / button[role=tab] component
-   (webGui default-base.css) so every theme styles them. Only the panel
-   show/hide lives here. */
-.ac-tab-content { display: none; }
-.ac-tab-content.active { display: block; }
-
 /* Status bar */
 .ac-status-bar {
     display: flex;
