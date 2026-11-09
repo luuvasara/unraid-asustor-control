@@ -2,6 +2,10 @@
 
 Copied by the build from the <CHANGES> block of asustor-control.plg; edit the .plg, not this file.
 
+## 2026.11.09c
+- The behaviour log is written again when appdata is an exclusive share. Unraid then shows /mnt/user/appdata as a link to the pool (for example /mnt/cache/appdata), and the symlink protection refused it, so the rows stayed in RAM and the Overview said "cannot write ... (code 3)". That link is now followed only when it points to appdata on a pool and Unraid's share settings say appdata is exclusive on that same pool; everything below it is still opened without following links. The rows still in RAM are written at the next flush.
+- A missing log folder is now created the same way, so it can never be created through a link.
+
 ## 2026.11.09b
 - New icon: the AS6706T front, its LCD and six trays. The Plugins page now shows the icon, a description and a support link (the GitHub issues), and the Utilities tile uses the same icon.
 - The Community Applications description and the README now describe the current tabs. No change in what the plugin does.

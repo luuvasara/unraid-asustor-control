@@ -83,6 +83,33 @@ SR=$W/sr7; mksr "$SR"; L=$SR/mnt/user/appdata/asustor-control/hwlog; mkdir -p "$
 SR=$W/sr8; mksr "$SR"; L=$SR/mnt/user/appdata/asustor-control/hwlog; mkdir -p "$L" "$W/elsewhere8"
 ! flush "$SR" "mv '$L' '$L.old'; ln -s '$W/elsewhere8' '$L'" && [ -z "$(ls -A "$W/elsewhere8")" ] \
   && ok "hwmon: log dir swapped to a symlink between check and write is refused" || bad "hwmon: race on the log dir followed the symlink"
+# Unraid 6.12+ exclusive share: shfs exposes /mnt/user/appdata as a symlink to /mnt/<pool>/appdata. Accepted only when the
+# target is exactly that form and shares.ini says appdata is exclusive on that pool; everything below it stays O_NOFOLLOW.
+mkexcl() {   # mkexcl <sysroot> <pool> <shares.ini exclusive> <shares.ini cachePool>: appdata as an exclusive-share symlink
+  rm -rf "$1/mnt/user/appdata"; mkdir -p "$1/mnt/$2/appdata"; ln -s "$1/mnt/$2/appdata" "$1/mnt/user/appdata"
+  printf '["appdata"]\nname="appdata"\nuseCache="only"\ncachePool="%s"\nexclusive="%s"\n' "$4" "$3" >"$1/var/local/emhttp/shares.ini"
+}
+STJ() { cat "$1/var/local/emhttp/plugins/asustor-control/hwlog-status.json"; }
+SR=$W/sr11; mksr "$SR"; mkexcl "$SR" cache yes cache; L=$SR/mnt/cache/appdata/asustor-control/hwlog
+flush "$SR" && [ -f "$L/hwlog-$TODAY.csv" ] && [ "$(stat -c %a "$L")" = 755 ] && [ -z "$(BUF "$SR")" ] && STJ "$SR" | grep -q '"last_error":""' \
+  && ok "hwmon: exclusive-share appdata symlink (-> /mnt/<pool>/appdata, exclusive in shares.ini) is written through" || bad "hwmon: exclusive-share appdata refused"
+SR=$W/sr12; mksr "$SR"; mkexcl "$SR" cache no cache
+rc=0; flush "$SR" || rc=$?; [ $rc -ne 0 ] && [ -z "$(ls -A "$SR/mnt/cache/appdata")" ] && [ -n "$(BUF "$SR")" ] && STJ "$SR" | grep -q 'not Unraid.s exclusive share' \
+  && ok "hwmon: appdata symlink is refused when shares.ini does not say exclusive" || bad "hwmon: wrote through a non-exclusive appdata symlink"
+SR=$W/sr13; mksr "$SR"; mkexcl "$SR" cache yes other
+! flush "$SR" && [ -z "$(ls -A "$SR/mnt/cache/appdata")" ] && ok "hwmon: appdata symlink to a pool other than shares.ini's is refused" || bad "hwmon: wrote through a symlink to the wrong pool"
+SR=$W/sr14; mksr "$SR"; mkexcl "$SR" cache yes cache; mkdir -p "$W/elsewhere14"; rm "$SR/mnt/user/appdata"; ln -s "$W/elsewhere14" "$SR/mnt/user/appdata"
+! flush "$SR" && [ -z "$(ls -A "$W/elsewhere14")" ] && ok "hwmon: appdata symlink to anywhere else is refused" || bad "hwmon: wrote through an appdata symlink to elsewhere"
+SR=$W/sr15; mksr "$SR"; mkexcl "$SR" user0 yes user0
+! flush "$SR" && ok "hwmon: appdata symlink to /mnt/user0/appdata is refused" || bad "hwmon: accepted /mnt/user0 as a pool"
+SR=$W/sr16; mksr "$SR"; mkexcl "$SR" cache yes cache; mkdir -p "$W/elsewhere16/hwlog"; ln -s "$W/elsewhere16" "$SR/mnt/cache/appdata/asustor-control"
+! flush "$SR" && [ -z "$(ls -A "$W/elsewhere16/hwlog")" ] && ok "hwmon: exclusive share, planted symlink at asustor-control is still refused" || bad "hwmon: exclusive share followed a symlinked asustor-control"
+SR=$W/sr17; mksr "$SR"; mkexcl "$SR" cache yes cache; mkdir -p "$SR/mnt/cache/appdata/asustor-control" "$W/elsewhere17"; ln -s "$W/elsewhere17" "$SR/mnt/cache/appdata/asustor-control/hwlog"
+! flush "$SR" && [ -z "$(ls -A "$W/elsewhere17")" ] && ok "hwmon: exclusive share, planted symlink at hwlog is still refused" || bad "hwmon: exclusive share followed a symlinked hwlog dir"
+SR=$W/sr18; mksr "$SR"; mkexcl "$SR" cache yes cache; L=$SR/mnt/cache/appdata/asustor-control/hwlog; mkdir -p "$L"; echo victim >"$W/victim18"; ln -s "$W/victim18" "$L/hwlog-$TODAY.csv"
+! flush "$SR" && [ "$(cat "$W/victim18")" = victim ] && ok "hwmon: exclusive share, planted symlink day file is still not followed" || bad "hwmon: exclusive share followed a symlinked day file"
+SR=$W/sr19; mksr "$SR"; mkexcl "$SR" cache yes cache; mv "$SR/mnt/cache" "$W/realpool19"; ln -s "$W/realpool19" "$SR/mnt/cache"
+! flush "$SR" && [ -z "$(ls -A "$W/realpool19/appdata")" ] && ok "hwmon: exclusive share whose /mnt/<pool> is itself a symlink is refused" || bad "hwmon: followed a symlinked /mnt/<pool>"
 prune() { local rc=0; ASUSTOR_SYSROOT=$1 ASUSTOR_TEST_FN=prune_logdir bash "$HWMON" 2>/dev/null || rc=$?; return $rc; }
 SR=$W/sr9; mksr "$SR"; L=$SR/mnt/user/appdata/asustor-control/hwlog; mkdir -p "$L"
 for f in hwlog-2020-01-01.csv pwm-events-2020-01-01.log notours-2020-01-01.csv hwlog-$TODAY.csv; do echo x >"$L/$f"; done

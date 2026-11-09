@@ -2,12 +2,12 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "asustor-control">
   <!ENTITY author    "Asustor Control project">
-  <!ENTITY version   "2026.11.09b">
+  <!ENTITY version   "2026.11.09c">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main">
   <!ENTITY pluginURL "&gitURL;/asustor-control.plg">
   <!ENTITY pkg       "asustor-control-&version;-x86_64-1.txz">
   <!ENTITY pkgURL    "&gitURL;/packages/&pkg;">
-  <!ENTITY md5       "a0d9d9873b35b71d126091473ddb5b42">
+  <!ENTITY md5       "a8151778eb44d20355b8ff2bcc4bc3d8">
 ]>
 <!-- LCD, front-panel LEDs/buttons and hardware monitoring for Asustor NAS units running Unraid.
      Install: Plugins, Install Plugin, https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main/asustor-control.plg
@@ -17,6 +17,10 @@
         launch="Utilities/AsustorControl" pluginURL="&pluginURL;" support="https://github.com/luuvasara/unraid-asustor-control/issues">
 
 <CHANGES>
+###2026.11.09c
+- The behaviour log is written again when appdata is an exclusive share. Unraid then shows /mnt/user/appdata as a link to the pool (for example /mnt/cache/appdata), and the symlink protection refused it, so the rows stayed in RAM and the Overview said "cannot write ... (code 3)". That link is now followed only when it points to appdata on a pool and Unraid's share settings say appdata is exclusive on that same pool; everything below it is still opened without following links. The rows still in RAM are written at the next flush.
+- A missing log folder is now created the same way, so it can never be created through a link.
+
 ###2026.11.09b
 - New icon: the AS6706T front, its LCD and six trays. The Plugins page now shows the icon, a description and a support link (the GitHub issues), and the Utilities tile uses the same icon.
 - The Community Applications description and the README now describe the current tabs. No change in what the plugin does.

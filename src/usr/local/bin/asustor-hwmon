@@ -22,7 +22,8 @@
 #
 # The log dir is on a user share, which may be writable over SMB/NFS, and the daemon runs as
 # root: the day and events files are opened with O_NOFOLLOW through pinned dir fds (see
-# logdir_op; retention too), so no symlink is ever followed; a failure is warned once and the rows
+# logdir_op; retention too), so no symlink below the share is followed (the share root only when
+# it is Unraid's exclusive-share link to a pool); a failure is warned once and the rows
 # stay buffered. The dir gets mode 755 only when the daemon creates it. Process names from /proc
 # are reduced to [A-Za-z0-9._-] before they are logged.
 
@@ -314,21 +315,56 @@ check_drivers() {
 declare -A WARNED   # message -> 1 once the Action Log has it (no log spam every flush)
 warn_once() { [ -n "${WARNED[$1]:-}" ] && return 0; WARNED[$1]=1; action_log "WARNING: $1"; }
 
-# logdir_op append <name> | prune <days>, run on $LOGDIR without ever following a symlink: every
-# path component from appdata down is opened O_NOFOLLOW (dirs also O_DIRECTORY) and the next one
-# is opened through /proc/self/fd/<fd> of the previous, so a symlink planted or swapped in at any
-# time (also between a check and the write) is never followed. append: stdin is appended to
-# <name> (opened O_NOFOLLOW). prune: in the pinned hwlog dir, unlink regular files (lstat) named
-# hwlog-YYYY-MM-DD.csv / pwm-events-YYYY-MM-DD.log older than <days>. Exit 3 = asustor-control
-# or hwlog is not a real dir, 4 = the file is a symlink or cannot be opened, 5 = write failed.
+# logdir_op append <name> | prune <days> | mkdirs, run on $LOGDIR without ever following a symlink
+# below the share: every path component from appdata down is opened O_NOFOLLOW (dirs also
+# O_DIRECTORY) and the next one is opened through /proc/self/fd/<fd> of the previous, so a symlink
+# planted or swapped in at any time (also between a check and the write) is never followed.
+# The one exception is the share root itself: on Unraid 6.12+ an exclusive share (all data on one
+# pool) is exposed by shfs as the symlink /mnt/user/appdata -> /mnt/<pool>/appdata. That symlink is
+# accepted only if its target is exactly /mnt/<pool>/appdata and Unraid's own share state
+# (/var/local/emhttp/shares.ini) says appdata is exclusive on that pool; /mnt/<pool> and appdata
+# are then opened O_NOFOLLOW from /mnt down. Any other symlink there is refused (exit 6).
+# append: stdin is appended to <name> (opened O_NOFOLLOW). prune: in the pinned hwlog dir, unlink
+# regular files (lstat) named hwlog-YYYY-MM-DD.csv / pwm-events-YYYY-MM-DD.log older than <days>.
+# mkdirs: create missing asustor-control and hwlog (mode 755) in the pinned dirs.
+# Exit 3 = asustor-control or hwlog is not a real dir, 4 = the file is a symlink or cannot be
+# opened, 5 = write failed, 6 = appdata is a symlink but not Unraid's exclusive share.
 logdir_op() {
     perl -e '
-        use Fcntl; my ($op, $arg, $base, @parts) = @ARGV;
-        sysopen(my $d, $base, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 3;
+        use Fcntl; my ($op, $arg, $root, @parts) = @ARGV;
+        my $base = "$root/mnt/user/appdata"; my $d;
+        if (-l $base) {
+            # Unraid exclusive share: /mnt/user/appdata -> /mnt/<pool>/appdata (absolute, as shfs makes it)
+            my $t = readlink($base); exit 6 unless defined $t;
+            if (length $root) {   # tests (ASUSTOR_SYSROOT): the fake sysroot prefixes the target; empty on a server
+                exit 6 unless index($t, "$root/") == 0; $t = substr($t, length $root);
+            }
+            my ($pool) = $t =~ m{\A/mnt/([A-Za-z0-9_][A-Za-z0-9_.-]*)/appdata\z} or exit 6;
+            exit 6 if $pool =~ m{\A(?:user|user0|disks|remotes|addons|rootshare)\z};
+            my ($sec, %sh) = ("");
+            open(my $ini, "<", "$root/var/local/emhttp/shares.ini") or exit 6;
+            while (<$ini>) {
+                if (/^\[\"?([^\]\"]*)\"?\]/) { $sec = $1; next; }
+                $sh{$1} = $2 if $sec eq "appdata" && /^(\w+)="([^"]*)"/;
+            }
+            exit 6 unless ($sh{exclusive} // "") eq "yes" && ($sh{cachePool} // "") eq $pool;
+            sysopen(my $m, "$root/mnt", O_RDONLY | O_DIRECTORY) or exit 6;
+            sysopen(my $p, "/proc/self/fd/" . fileno($m) . "/$pool", O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 6;
+            sysopen($d, "/proc/self/fd/" . fileno($p) . "/appdata", O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 6;
+        } else {
+            sysopen($d, $base, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 3;
+        }
         for my $p (@parts) {
-            sysopen(my $n, "/proc/self/fd/" . fileno($d) . "/$p", O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 3;
+            my $path = "/proc/self/fd/" . fileno($d) . "/$p";
+            if ($op eq "mkdirs" && !lstat($path)) {
+                mkdir($path, 0755) or exit 3;
+                sysopen(my $n, $path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 3;
+                chmod(0755, $n); $d = $n; next;
+            }
+            sysopen(my $n, $path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) or exit 3;
             $d = $n;
         }
+        exit 0 if $op eq "mkdirs";
         my $dir = "/proc/self/fd/" . fileno($d);
         if ($op eq "prune") {
             opendir(my $dh, $dir) or exit 3;
@@ -343,7 +379,7 @@ logdir_op() {
         sysopen(my $f, "$dir/$arg", O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW, 0644) or exit 4;
         local $/; my $data = <STDIN>; $data = "" unless defined $data;
         my $w = syswrite($f, $data); exit 5 unless defined $w && $w == length $data;
-    ' "$1" "$2" "$(dirname "$(dirname "$LOGDIR")")" "$(basename "$(dirname "$LOGDIR")")" "$(basename "$LOGDIR")"
+    ' "$1" "$2" "$R" "$(basename "$(dirname "$LOGDIR")")" "$(basename "$LOGDIR")"
 }
 append_nofollow() { logdir_op append "$1"; }
 prune_logdir() { logdir_op prune "$RETAIN_DAYS" < /dev/null; }
@@ -353,17 +389,16 @@ flush_buffer() {
     if [ ! -d "$(dirname "$LOGDIR")" ] && [ ! -d "$R/mnt/user/appdata" ]; then
         write_status "appdata not mounted; buffering"; return 1
     fi
-    # Owner/mode are set only when we create the dir; an existing dir is never chown/chmod-ed
-    # (that would follow a symlink). The O_NOFOLLOW opens below are the actual guard.
-    if [ ! -e "$LOGDIR" ] && [ ! -L "$LOGDIR" ] && [ ! -L "$(dirname "$LOGDIR")" ]; then
-        mkdir -p "$(dirname "$LOGDIR")" 2>/dev/null
-        mkdir -m 755 "$LOGDIR" 2>/dev/null && chown -h "$(id -u):$(id -g)" "$LOGDIR" 2>/dev/null
-    fi
+    # Missing dirs are created (mode 755) through the same pinned fds; an existing dir is never
+    # chown/chmod-ed (that would follow a symlink). The O_NOFOLLOW opens are the actual guard.
+    local rc=0
+    [ -d "$LOGDIR" ] && [ ! -L "$LOGDIR" ] || logdir_op mkdirs "" < /dev/null || rc=$?
     local day; day=$(date +%F)
-    local name="hwlog-$day.csv" file="$LOGDIR/hwlog-$day.csv" n rc=0
+    local name="hwlog-$day.csv" file="$LOGDIR/hwlog-$day.csv" n
     n=$(wc -l < "$BUFFER")
     [ -n "${ASUSTOR_TEST_FN:-}" ] && [ -n "${ASUSTOR_TEST_BEFORE_WRITE:-}" ] && bash -c "$ASUSTOR_TEST_BEFORE_WRITE"   # tests: race
-    if [ -e "$file" ] || [ -L "$file" ]; then
+    if (( rc != 0 )); then :
+    elif [ -e "$file" ] || [ -L "$file" ]; then
         append_nofollow "$name" < "$BUFFER" || rc=$?
     else
         { echo "$HEADER"; cat "$BUFFER"; } | append_nofollow "$name" || rc=$?
@@ -373,6 +408,8 @@ flush_buffer() {
     if (( rc != 0 )); then
         case $rc in
             3) warn_once "$LOGDIR or its parent is a symlink or not a directory; behaviour log not written" ;;
+            6) warn_once "$R/mnt/user/appdata is a symlink that is not Unraid's exclusive share of appdata on its pool (target $(readlink "$R/mnt/user/appdata" 2>/dev/null)); behaviour log not written"
+               write_status "appdata is a symlink that is not Unraid's exclusive share; buffering"; return 1 ;;
             4) warn_once "$file is a symlink or cannot be opened; behaviour log not written" ;;
             *) warn_once "append to $file failed" ;;
         esac
