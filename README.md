@@ -10,7 +10,8 @@ This plugin stands on **[mafredri](https://github.com/mafredri)'s Asustor work**
 Unraid kernel. Start there; see [Credits and upstream](#credits-and-upstream).
 
 Asustor Control drives the front-panel LCD and the status LED of an Asustor NAS that runs
-Unraid, and shows and logs what the fan, the CPU and the disks are doing. It does not control
+Unraid, shows the unit as it looks with its bays live, and shows and logs what the fan, the CPU
+and the disks are doing. It does not control
 the fan: fan control is left to the FanCtrl Plus plugin, and the kernel drivers come from the
 Asustor Platform Drivers plugin (see [Requirements](#requirements)).
 
@@ -32,7 +33,11 @@ what other units look like.
 | Front-panel LEDs (add-on) | per-bay activity (blinks on disk I/O, read from `/sys/block/*/stat`, never wakes a disk) and fault LEDs (Unraid marks the disk disabled/invalid or with read errors); status LED steady = array started, slow blink = parity check/rebuild, fast blink = stopped, red = a disk is disabled/invalid/missing; per-bay **Locate** blink on the LEDs and Buttons tab |
 | USB Copy button (add-on) | short/long press actions: log (default), notification, locate, or your own script; there is no built-in shutdown |
 | Driver watchdog | when the Asustor kernel drivers are missing (typically after an Unraid update with no matching driver build yet), a red banner on the page, one Unraid notification per boot, an Action Log entry; the monitor waits for the sensor chip instead of exiting |
-| Status tab | live fan PWM/RPM, CPU and disk temperatures, a temperature and fan history chart, the action log and the health of the behaviour log; tabs and colours follow the active Unraid theme |
+| Overview | the AS6706T drawn front and rear after Asustor's installation guide, each bay with its drive, temperature and Unraid's state, live; the bay map; live fan PWM/RPM, CPU and drive temperatures (bays and M.2 slots), the LCD preview, the action log and the health of the behaviour log |
+| Main page bay labels | "Bay 1" to "Bay 6" after each drive's name on the Main page (switch off on the Overview); the bay order is marked "not confirmed" until you check it with Locate and confirm it on the LEDs and Buttons tab |
+| History | CPU and hottest-drive temperature, fan PWM and speed over 1, 6 or 12 hours, with Unraid's warning and critical lines and the same numbers as a table |
+| Hardware | board, BIOS and CPU, which Asustor drivers are loaded, the SATA controller's PCIe link and error counters, each drive's port, firmware and SMART counters, known issues checked on this server, firmware |
+| Report | an anonymised hardware report (serials, MAC and IP addresses, hostname replaced) to copy, download or open as an issue; nothing is sent from the server |
 | Behaviour log | `asustor-hwmon` samples every 10 s (PWM, RPM, CPU package/core temperatures, clock, throttle counter, what FanCtrl Plus acted on, NVMe and disk temperatures) to `/mnt/user/appdata/asustor-control/hwlog/`, one CSV per day, 30-day retention; sleeping disks are never woken (temperatures come from Unraid's `disks.ini`) |
 | Fan attribution | every PWM change is written to the Action Log with what FanCtrl Plus reacted to and the processes (and Docker containers) that used the most CPU and I/O just before it |
 | Offline report | `tools/hwlog-report.py` analyses the behaviour log on a workstation (throttling margin, which drives pull the fan, idle PWM); format in [docs/hwlog-format.md](docs/hwlog-format.md) |
@@ -43,9 +48,10 @@ Nothing is written to the fan registers: the plugin only reads hwmon, except for
 
 | Model | State |
 |---|---|
-| AS6706T (Lockerstor 6 Gen2) | tested: LCD, status LED, monitoring |
+| AS6706T (Lockerstor 6 Gen2) | tested: LCD, status LED, monitoring; the drawing and the bay labels are for this model |
 | other Lockerstor Gen2 / AS67xx / AS66xx units with an LCD and an IT86xx Super I/O | expected to work (same LCD protocol and Super I/O family), not tested |
 | units without an LCD | monitoring and the log work; the LCD daemon finds no display |
+| other models | the Overview leaves the drawing and the bay labels out and says so; the rest works where the Asustor drivers do |
 
 ### Requirements
 
@@ -89,21 +95,33 @@ Please use the hardware report form (Issues, New issue, Hardware report) for oth
 
 Made-up data, one panel each.
 
-Hardware monitor: fan PWM and RPM, CPU and drive temperature, the behaviour log.
+Overview: the unit as it looks, each bay with its drive, temperature and state.
+
+![Overview, black theme](docs/screenshots/overview-black.png)
+
+The same drawing in the white theme.
+
+![Overview, white theme](docs/screenshots/overview-white.png)
+
+Hardware monitor: fan PWM and RPM, CPU and hottest drive, the behaviour log.
 
 ![Hardware monitor](docs/screenshots/hardware-monitor.png)
 
-Fan history: one hour of fan, CPU and drive temperature.
+History: temperatures and the fan over the last hour.
 
-![Fan history](docs/screenshots/fan-history.png)
+![History](docs/screenshots/history-white.png)
 
-LCD Settings: port, rotation interval and the screens in the rotation.
+Hardware: known issues, checked on this server.
 
-![LCD Settings](docs/screenshots/lcd-settings.png)
+![Known issues](docs/screenshots/hardware-issues-black.png)
 
-LEDs and Buttons: the bay map with activity LED, fault LED and Locate.
+LCD: port, rotation interval and the screens in the rotation.
 
-![Bay map](docs/screenshots/leds.png)
+![LCD](docs/screenshots/lcd-settings.png)
+
+LEDs and Buttons: the bay map with activity LED, fault LED and Locate, the bay order.
+
+![LEDs and Buttons](docs/screenshots/leds.png)
 
 ## Install
 
@@ -117,25 +135,24 @@ The package (`packages/asustor-control-<version>-x86_64-1.txz`) is downloaded fr
 repository and checked against the MD5 in the `.plg`. Updates show up in Unraid's plugin
 update check, because the `.plg` carries its `pluginURL`. Settings live on the flash in
 `/boot/config/plugins/asustor-control/`; the behaviour log in appdata is kept when the plugin
-is removed. The page is under **Utilities, Asustor Control**.
+is removed. The page is under **Utilities, Asustor Control**: Overview, LCD, LEDs and Buttons,
+History, Hardware, Report, About.
 
 ## Build from source
 
 Needs bash, GNU tar, xz, Python 3; PHP (CLI) for the page lint (optional).
 
     ./tests/run-tests.sh      # offline: script syntax, PHP lint, .plg/package consistency, hwlog-report.py, harness fixtures
-    ./tests/render-test.sh     # the four tabs in headless Chrome, all themes (needs Chrome, PHP and network the first time for the stylesheets)
+    ./tests/render-test.sh     # every tab in headless Chrome, all themes, on a made-up AS6706T (tests/mkserver.sh) and on another board (needs Chrome, PHP and network the first time for the stylesheets)
     ./build.sh                # runs kit/bin/build.sh; version comes from asustor-control.plg, bump it on every change
 
 `build.sh` builds `packages/asustor-control-<version>-x86_64-1.txz` (file modes forced, archive
 root checked, owner root), writes the package MD5 into the `.plg` and regenerates
 `CHANGELOG.md` from the `.plg`'s `<CHANGES>`. Build on a workstation, never on the NAS.
 
-The screenshots come from the render harness: `tests/harness/serve.sh <port>` serves the page
-with PHP's built-in server and made-up fixtures (`tests/harness/mkfixture.py`), and
-`node tests/harness/shot.cjs http://127.0.0.1:<port> docs/screenshots` captures the three tabs (cropped to one panel each for this README) with
-Chrome through playwright-core. Unraid's stylesheets and jQuery are not in this repository; point
-`WEBGUI_COPY` at a copy of an Unraid 7.x `webGui/styles` and `JQUERY` at a `jquery.min.js`.
+The screenshots come from the kit's render harness (`kit/render/`) with Unraid's own stylesheets,
+on the made-up AS6706T of `tests/mkserver.sh` and the made-up daemon answers of
+`tests/harness/mkfixture.py`, cropped to one panel each.
 
 ### Repository layout
 
@@ -146,7 +163,8 @@ Chrome through playwright-core. Unraid's stylesheets and jQuery are not in this 
 | `kmods/` | the LED/button driver add-on packages, one per Unraid kernel (listed in `src/.../kmods.manifest`); temporary until the Asustor Platform Drivers plugin ships the same modules |
 | `src/` | the package contents, laid out as on the server (`usr/local/emhttp/plugins/asustor-control/`, `usr/local/bin/`, `etc/rc.d/`) |
 | `build.sh` | builds the package |
-| `tests/` | offline checks (`tests/run-tests.sh`); `tests/harness/` renders the page with made-up data for the screenshots |
+| `tests/` | offline checks (`tests/run-tests.sh`), the render test (`tests/render-test.sh`) and its made-up server (`tests/mkserver.sh`) |
+| `kit/` | the shared plugin kit (build, About tab, drive map, the AS6706T profile and drawing, Main page labels), copied in by `kit-sync` |
 | `tools/` | `hwlog-report.py`, offline analysis of the behaviour log |
 | `docs/` | `hwlog-format.md`, the behaviour log format; `screenshots/` for this README |
 | `CHANGELOG.md` | generated from the `.plg` |

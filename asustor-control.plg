@@ -2,12 +2,12 @@
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "asustor-control">
   <!ENTITY author    "Asustor Control project">
-  <!ENTITY version   "2026.11.06a">
+  <!ENTITY version   "2026.11.09a">
   <!ENTITY gitURL    "https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main">
   <!ENTITY pluginURL "&gitURL;/asustor-control.plg">
   <!ENTITY pkg       "asustor-control-&version;-x86_64-1.txz">
   <!ENTITY pkgURL    "&gitURL;/packages/&pkg;">
-  <!ENTITY md5       "b1ea7f9a5e5ffdf53482d4ff26772a3f">
+  <!ENTITY md5       "ef09d136523be0df3db4979e007cd0f3">
 ]>
 <!-- LCD, front-panel LEDs/buttons and hardware monitoring for Asustor NAS units running Unraid.
      Install: Plugins, Install Plugin, https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main/asustor-control.plg
@@ -16,6 +16,16 @@
 <PLUGIN name="&name;" author="&author;" version="&version;" min="6.12.0" launch="Utilities/AsustorControl" pluginURL="&pluginURL;">
 
 <CHANGES>
+###2026.11.09a
+- New Overview tab: the AS6706T drawn as it looks, front and rear, after Asustor's installation guide, with each bay's drive, temperature and state, live. The hardware monitor, drive temperatures, LCD preview, action log and actions are on the same tab, as before.
+- Bay labels on the Main page: each drive in a bay shows "Bay 1" to "Bay 6" after its name. They can be switched off on the Overview.
+- The bay order (bay N = the controller's port N) is marked "not confirmed" until you check it with Locate and set Bay order confirmed on the LEDs and Buttons tab. A corrected bay order there now moves the drawing and the Main page labels too.
+- New History tab: CPU and hottest-drive temperature, fan PWM and speed over 1, 6 or 12 hours, with Unraid's warning and critical lines and a table of the same numbers. It replaces the fan chart of the old status tab.
+- New Hardware tab: board, BIOS and CPU, which Asustor drivers are loaded, the SATA controller's link and error counters, each drive's port, firmware and SMART counters, known issues checked on this server, and firmware.
+- New Report tab: an anonymised hardware report to copy, download or send as an issue.
+- Tabs now read Overview, LCD, LEDs and Buttons, History, Hardware, Report, About, like the QNAP and Synology plugins.
+- On a server that is not an AS6706T, the drawing and the bay labels are left out and the page says why; everything else works as before.
+
 ###2026.11.06a
 - New About tab: the installed version, the latest changes and links. Updates print the latest changes in a box at the end of the install output.
 - The page is now four tabs of Unraid's own tab bar: Asustor Control (status), LCD Settings, LEDs and Buttons, About. What each tab shows is unchanged.
@@ -211,6 +221,9 @@ rm -f /var/run/asustor-fanctl.pid.lock 2>/dev/null
 # Clean up old bundled modules from previous versions
 rm -f /lib/modules/*/extra/asustor*.ko.xz 2>/dev/null
 
+# Default settings once (the Overview's settings form writes this file through Unraid's /update.php)
+[ -f /boot/config/plugins/&name;/&name;.cfg ] || cp /usr/local/emhttp/plugins/&name;/default/&name;.cfg /boot/config/plugins/&name;/&name;.cfg
+
 # Start daemons
 /etc/rc.d/rc.asustor-control restart
 
@@ -243,7 +256,7 @@ for p in /var/log/packages/asustor-ledkeys-kmod-*; do [ -e "$p" ] || continue; r
 rm -rf /usr/local/emhttp/plugins/asustor-control
 rm -f /etc/rc.d/rc.asustor-control
 rm -rf /var/local/emhttp/plugins/asustor-control /var/run/asustor-control
-echo "Asustor Control removed."
+echo "Asustor Control removed. Its settings stay on the flash drive in /boot/config/plugins/asustor-control."
 </INLINE>
 </FILE>
 

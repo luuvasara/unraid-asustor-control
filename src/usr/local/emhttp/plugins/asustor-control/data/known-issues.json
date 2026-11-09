@@ -1,0 +1,61 @@
+{
+  "updated": "2026-11-09",
+  "issues": [
+    {
+      "id": "drivers-missing",
+      "title": "Asustor kernel drivers not loaded",
+      "check": "drivers",
+      "text": "The fan and temperature readings and the front-panel LEDs need the asustor, asustor_it87 and asustor_gpio_it87 modules of the Asustor Platform Drivers plugin, built for the running Unraid kernel. After an Unraid update there may be no build yet: the page shows a red banner and Unraid one notification per boot. Wait for the build, or stay on the previous Unraid version.",
+      "source": "This plugin's driver watchdog (asustor-drivercheck, drivers.json)"
+    },
+    {
+      "id": "led-drivers",
+      "title": "Front-panel LEDs have no driver",
+      "check": "leds",
+      "text": "Unraid's kernel has no leds-gpio or gpio-keys-polled driver, so the LEDs and the button the platform driver describes stay at their firmware state. The LED/button add-on on the LEDs and Buttons tab installs both for the kernels it has a build for.",
+      "source": "Unraid kernel configuration; asustor-platform-driver (leds-gpio and gpio-keys-polled platform devices)"
+    },
+    {
+      "id": "bay-order-not-confirmed",
+      "title": "Bay order not confirmed",
+      "check": "bayorder",
+      "text": "Bay N is taken to be the Nth port of the ASM1166 SATA controller, as in the platform driver's LED table. Check it once with Locate on the LEDs and Buttons tab; correct the order there if a wrong tray blinks, and set Bay order confirmed.",
+      "source": "Enclosure profile of the plugin kit (asustor-as6706t)"
+    },
+    {
+      "id": "cpu-idle-states",
+      "title": "The CPU has no idle states (runs warm when idle)",
+      "check": "cpuidle",
+      "text": "Linux found no CPU idle driver, so the cores only halt and the package never reaches its deep idle states: the CPU idles around 50 °C and the fan runs faster than it needs to. On these boards the firmware loads its C-state tables only when C-states are enabled in the BIOS setup. Enabling them there (a reboot into the BIOS setup) is the fix; owners of other Lockerstor units report much lower idle temperatures afterwards.",
+      "source": "/sys/devices/system/cpu/cpuidle/current_driver; Intel reference ACPI code (C-state tables loaded on demand); community reports (r/asustor, Lockerstor 4 Gen2)"
+    },
+    {
+      "id": "link-trained-down",
+      "title": "The SATA controller's PCIe link runs below what both ends can do",
+      "check": "links",
+      "text": "The ASM1166 trained to a lower speed or fewer lanes than it and the board support. On a soldered-down controller this points at a fault of the board or its firmware; note it in a hardware report.",
+      "source": "PCIe link state from sysfs (current_link_* against max_link_* of both ends)"
+    },
+    {
+      "id": "pcie-errors",
+      "title": "PCIe errors counted on the SATA controller",
+      "check": "aer",
+      "text": "The controller counted PCIe errors since boot (AER). A few correctable errors are fixed by the link itself; a growing count belongs in a hardware report.",
+      "source": "AER counters from sysfs (aer_dev_correctable, aer_dev_nonfatal, aer_dev_fatal)"
+    },
+    {
+      "id": "sata-link-slow",
+      "title": "A drive's SATA link runs below the port's speed",
+      "check": "sata",
+      "text": "A drive linked at a lower SATA speed than the port supports. Older drives link at 3.0 Gbps by design; for a 6 Gbps drive, reseat it in its tray.",
+      "source": "SATA link speed from sysfs (ata_link sata_spd against hw_sata_spd_limit)"
+    }
+  ],
+  "firmware": [
+    {
+      "part": "LCD panel",
+      "text": "No firmware version is read from the panel; the plugin only sends it text.",
+      "source": "asustor-lcd (Asustor's LCD serial protocol, as documented by mafredri/lcm)"
+    }
+  ]
+}

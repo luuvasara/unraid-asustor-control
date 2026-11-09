@@ -1,0 +1,81 @@
+#!/bin/bash
+# ac-report - read-only hardware collector for the Report tab (asustor-control). Prints a plain-text report to stdout.
+# Run only by include/report.php, with no argument; its output goes through the anonymiser (include/ac-anon.php) before
+# anything is shown. Nothing is stored and nothing leaves the server (the page offers Copy, Download and an issue link in the
+# user's own browser). READ-ONLY: reads /sys and /proc, runs lspci, lsusb and dmesg. It opens no drive (no smartctl, no
+# hdparm: nothing can wake one) and writes to no device, LED or port. Every command has a timeout. Overrides (tests): AC_SYS,
+# AC_ETC, AC_KERNEL, AC_PROC, AC_BIN_*.
+SYS=${AC_SYS:-/sys}; PROC=${AC_PROC:-/proc}; ETC=${AC_ETC:-/etc}; KERNEL=${AC_KERNEL:-$(uname -r)}
+LSPCI=${AC_BIN_LSPCI:-lspci}; LSUSB=${AC_BIN_LSUSB:-lsusb}; DMESG=${AC_BIN_DMESG:-dmesg}
+T() { timeout 20 "$@" 2>&1; }
+sec() { printf '\n### %s\n' "$1"; }
+rd() { [ -r "$1" ] && tr -d '\0' <"$1" 2>/dev/null | head -c 4096; }
+
+echo "Asustor Control plugin: hardware report"
+echo "generated: $(date -u '+%Y-%m-%d %H:%M UTC')"
+sec "versions"
+echo "unraid: $(sed -n 's/^version="\(.*\)"/\1/p' "$ETC/unraid-version" 2>/dev/null)"
+echo "kernel: $KERNEL"
+for p in asustor-control unraid-asustorpfd fancontrolplus; do
+  f=/var/log/plugins/$p.plg; [ -e "$f" ] && echo "plugin $p: $(sed -n 's/.*<!ENTITY version *"\([^"]*\)".*/\1/p' "$f" | head -1)"
+done
+
+sec "DMI"
+for k in sys_vendor product_name board_vendor board_name bios_vendor bios_version bios_date; do
+  [ -r "$SYS/class/dmi/id/$k" ] && echo "$k: $(rd "$SYS/class/dmi/id/$k")"
+done
+sec "CPU"
+grep -m1 '^model name' "$PROC/cpuinfo"; echo "cpus: $(grep -c '^processor' "$PROC/cpuinfo")"
+echo "memory: $(awk '/^MemTotal/ {printf "%.1f GiB", $2/1048576}' "$PROC/meminfo")"
+echo "cpuidle driver: $(rd "$SYS/devices/system/cpu/cpuidle/current_driver" || echo none)"
+
+sec "Asustor drivers"
+for m in asustor asustor_it87 asustor_gpio_it87 leds_gpio gpio_keys_polled; do
+  [ -d "$SYS/module/$m" ] && echo "$m: loaded" || echo "$m: not loaded"
+done
+echo "LED devices: $(find "$SYS/class/leds" -mindepth 1 -maxdepth 1 2>/dev/null | sed 's#.*/##' | sort | tr '\n' ' ')"
+sec "hwmon sensors"
+for h in "$SYS"/class/hwmon/hwmon*; do [ -e "$h" ] && echo "${h##*/} $(rd "$h/name")"; done
+
+sec "lspci -nn"; T "$LSPCI" -nn
+sec "lspci -tvnn"; T "$LSPCI" -tvnn
+
+sec "SATA and NVMe controllers (ids, subsystem, driver, links, AER)"
+for d in "$SYS"/bus/pci/devices/*; do
+  c=$(rd "$d/class"); case $c in 0x0106*|0x0108*) ;; *) continue ;; esac
+  drv=; [ -L "$d/driver" ] && drv=$(basename "$(readlink "$d/driver")")
+  echo "${d##*/} $(rd "$d/vendor"):$(rd "$d/device") sub $(rd "$d/subsystem_vendor"):$(rd "$d/subsystem_device") rev $(rd "$d/revision") class $c driver ${drv:-none}"
+  echo "  link now $(rd "$d/current_link_speed") x$(rd "$d/current_link_width"), max $(rd "$d/max_link_speed") x$(rd "$d/max_link_width")"
+  for a in correctable nonfatal fatal; do [ -r "$d/aer_dev_$a" ] && echo "  aer $a: $(grep '^TOTAL' "$d/aer_dev_$a" | head -1)"; done
+  echo "  path $(readlink -f "$d" | sed "s#^$SYS##")"
+done
+
+sec "AHCI hosts (capabilities of each controller; first port)"
+seen=
+for h in "$SYS"/class/scsi_host/host*; do
+  [ "$(rd "$h/proc_name")" = ahci ] || continue
+  pci=$(readlink -f "$h" | grep -oE '[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]' | tail -1)
+  case " $seen " in *" $pci "*) continue ;; esac; seen="$seen $pci"
+  echo "$pci ${h##*/} cap=$(rd "$h/ahci_host_caps") cap2=$(rd "$h/ahci_host_cap2") version=$(rd "$h/ahci_host_version")"
+done
+
+sec "ATA ports with a link"
+for a in "$SYS"/class/ata_port/ata*; do
+  [ -e "$a" ] || continue; n=${a##*/ata}
+  spd=$(rd "$SYS/class/ata_link/link$n/sata_spd")
+  [ -n "$spd" ] && [ "$spd" != "<unknown>" ] || continue
+  pci=$(readlink -f "$a/device" | grep -oE '[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]' | tail -1)
+  echo "ata$n port_no=$(rd "$a/port_no") pci=$pci sata_spd=$spd limit=$(rd "$SYS/class/ata_link/link$n/hw_sata_spd_limit")"
+done
+sec "Drives (model, firmware rev, path; no serial is read)"
+for b in "$SYS"/block/sd* "$SYS"/block/nvme*; do
+  [ -e "$b/device" ] || continue
+  p=$(readlink -f "$b/device"); d=$b/device
+  echo "${b##*/}: $(rd "$d/vendor" | xargs) $(rd "$d/model" | xargs) rev $(rd "$d/rev" | xargs)$(rd "$d/firmware_rev" | xargs) size $(rd "$b/size") rotational $(rd "$b/queue/rotational")"
+  echo "  $(grep -oE '[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]/.*' <<<"$p" | sed -E 's#/(scsi_)?(host[0-9]+|target[0-9:]+|[0-9]+:[0-9]+:[0-9]+:[0-9]+)(/|$)#/#g')"
+done
+
+sec "lsusb"; T "$LSUSB"
+
+sec "dmesg (relevant lines)"
+T "$DMESG" | grep -iE 'DMI:|asustor|it87|leds-gpio|gpio-keys|ahci 0000|ata[0-9]+(\.[0-9]+)?: (SATA link|ATA-|exception|failed|hard resetting|limiting|link is slow)|1b21|AER|nvme[0-9]' | head -400

@@ -1,0 +1,396 @@
+{
+  "id": "qnap-tl-d1600s",
+  "name": "QNAP TL-D1600S",
+  "card": "QXP-1600eS-A1164",
+  "source": "QNAP TL-D400S/D800S/D1600S user guide (tl-dx00s-ug-04-en.pdf): rear SFF port 1 = HDD1-4, port 2 = HDD5-8, port 3 = HDD9-12, port 4 = SSD1-4; front bottom row HDD1..HDD8 left to right, top row HDD9..HDD12 then SSD1..SSD4; card: QXP-1600eS-A1164 (ASMedia switch with four ASM1164, QNAP subsystem vendor 1baa); the earlier QXP-1600eS with a Marvell 88SE1475 is not matched",
+  "match": {
+    "switch": "1b21:2824",
+    "controller": "1b21:1164",
+    "subsystem": [
+      "1baa:*"
+    ],
+    "controllers": 4,
+    "ports_per_controller": 4
+  },
+  "groups": {
+    "1": [
+      "HDD1",
+      "HDD2",
+      "HDD3",
+      "HDD4"
+    ],
+    "2": [
+      "HDD5",
+      "HDD6",
+      "HDD7",
+      "HDD8"
+    ],
+    "3": [
+      "HDD9",
+      "HDD10",
+      "HDD11",
+      "HDD12"
+    ],
+    "4": [
+      "SSD1",
+      "SSD2",
+      "SSD3",
+      "SSD4"
+    ]
+  },
+  "front": [
+    [
+      "HDD9",
+      "HDD10",
+      "HDD11",
+      "HDD12",
+      "SSD1",
+      "SSD2",
+      "SSD3",
+      "SSD4"
+    ],
+    [
+      "HDD1",
+      "HDD2",
+      "HDD3",
+      "HDD4",
+      "HDD5",
+      "HDD6",
+      "HDD7",
+      "HDD8"
+    ]
+  ],
+  "calibration": {
+    "note": "Measured 2026-11-08 on one unit with a blink test (each disk read for 20 s, the LEDs read at the front; all 16 bays consistent). port_to_position is a fact of the card: each ASM1164 serves one group of four bays in reverse port order, its port 1 (lowest ata port) = the highest bay of the group. card_port_to_group depends on how the four cables are plugged between card and enclosure: this list is the measured unit's cabling, for the card's controllers in PCI address order (there 03:00.0 = HDD9-12, 04:00.0 = SSD1-4, 05:00.0 = HDD1-4, 06:00.0 = HDD5-8). On another unit it is a default until confirmed with Locate; a plugin passes the confirmed cabling of a unit as the 'cabling' option.",
+    "port_to_position": [
+      4,
+      3,
+      2,
+      1
+    ],
+    "card_port_to_group": [
+      3,
+      4,
+      1,
+      2
+    ],
+    "card_port_to_group_default": true
+  },
+  "bay_kinds": {
+    "HDD": "3.5in",
+    "SSD": "2.5in"
+  },
+  "host_view": [
+    "Fans: run by the enclosure itself, from its fan switch at the back (Auto follows the enclosure's own temperature; High, Medium and Low are fixed). The server sees no fan speed or enclosure temperature.",
+    "LEDs: the status and drive lights are driven by the enclosure. Locate makes a drive's activity light flash by reading the drive.",
+    "Drive temperatures and SMART: the values Unraid reads from each drive, as for any other drive.",
+    "Firmware: the enclosure's LCD shows its name and firmware version (press Enter). Updating it needs QNAP's own JBOD Manager; nothing here writes to the enclosure.",
+    "Power: switch the enclosure on before the server, as QNAP's guide describes."
+  ],
+  "panel": {
+    "source": "QNAP TL-D400S/D800S/D1600S user guide (tl-dx00s-ug-04-en.pdf, version 4, 03/07/2020): front panel p.7 (Enter and Select buttons right of the LCD panel, status, link and fan error LEDs under it, drive LEDs in a strip between the two rows), rear panel p.9 (power switch, audio alert switch, SFF-8088 ports 1 to 4 top to bottom, fan speed switch, Kensington slot; three system fans; power input), drive numbering p.11; QNAP's product photo. All trays stand upright. Units: the guide's drawing at half size; schematic, not to scale.",
+    "front": {
+      "size": [
+        577,
+        452
+      ],
+      "body": [
+        0,
+        0,
+        577,
+        441
+      ],
+      "trays": [
+        {
+          "bays": [
+            "HDD9",
+            "HDD10",
+            "HDD11",
+            "HDD12"
+          ],
+          "x": 11,
+          "y": 27,
+          "w": 49,
+          "h": 182,
+          "step": 52,
+          "led": "below"
+        },
+        {
+          "bays": [
+            "SSD1",
+            "SSD2",
+            "SSD3",
+            "SSD4"
+          ],
+          "x": 253,
+          "y": 91,
+          "w": 29,
+          "h": 118,
+          "step": 31.5,
+          "led": "below"
+        },
+        {
+          "bays": [
+            "HDD1",
+            "HDD2",
+            "HDD3",
+            "HDD4",
+            "HDD5",
+            "HDD6",
+            "HDD7",
+            "HDD8"
+          ],
+          "x": 10.5,
+          "y": 247,
+          "w": 49,
+          "h": 185,
+          "step": 51.6,
+          "led": "above"
+        }
+      ],
+      "parts": [
+        {
+          "type": "cage",
+          "box": [
+            6,
+            5,
+            214,
+            208
+          ]
+        },
+        {
+          "type": "cage",
+          "box": [
+            249,
+            82,
+            135,
+            131
+          ]
+        },
+        {
+          "type": "strip",
+          "box": [
+            6,
+            214,
+            420,
+            28
+          ]
+        },
+        {
+          "type": "lcd",
+          "box": [
+            262,
+            21,
+            105,
+            36
+          ],
+          "title": "LCD panel: shows the enclosure's name, firmware and messages (Enter, Select). The server cannot read it."
+        },
+        {
+          "type": "buttons",
+          "box": [
+            385,
+            22,
+            12,
+            34
+          ],
+          "title": "Enter and Select buttons of the LCD panel"
+        },
+        {
+          "type": "leds",
+          "y": 73,
+          "x": [
+            281,
+            300,
+            319
+          ],
+          "names": [
+            "status",
+            "link",
+            "fan"
+          ],
+          "titles": [
+            "Status LED: green = ready; red = a system fan stopped or the enclosure is too hot",
+            "Link LED: green = a host is connected",
+            "Fan error LED: red = a system fan stopped"
+          ]
+        },
+        {
+          "type": "side",
+          "box": [
+            435,
+            49,
+            136,
+            372
+          ],
+          "text": "TL-D1600S"
+        }
+      ]
+    },
+    "rear": {
+      "size": [
+        577,
+        452
+      ],
+      "body": [
+        0,
+        0,
+        577,
+        441
+      ],
+      "parts": [
+        {
+          "type": "recess",
+          "box": [
+            14,
+            14,
+            280,
+            74
+          ]
+        },
+        {
+          "type": "grille",
+          "box": [
+            16,
+            112,
+            46,
+            320
+          ]
+        },
+        {
+          "type": "switch",
+          "box": [
+            96,
+            138,
+            22,
+            15
+          ],
+          "label": "power",
+          "title": "Power switch"
+        },
+        {
+          "type": "switch",
+          "box": [
+            106,
+            171,
+            8,
+            15
+          ],
+          "label": "buzzer",
+          "title": "Audio alert switch (the enclosure's buzzer on or off)"
+        },
+        {
+          "type": "sff",
+          "group": "1",
+          "box": [
+            104,
+            220,
+            15,
+            22
+          ]
+        },
+        {
+          "type": "sff",
+          "group": "2",
+          "box": [
+            104,
+            245,
+            15,
+            22
+          ]
+        },
+        {
+          "type": "sff",
+          "group": "3",
+          "box": [
+            104,
+            302,
+            15,
+            22
+          ]
+        },
+        {
+          "type": "sff",
+          "group": "4",
+          "box": [
+            104,
+            327,
+            15,
+            22
+          ]
+        },
+        {
+          "type": "switch",
+          "box": [
+            106,
+            375,
+            8,
+            15
+          ],
+          "label": "fan mode",
+          "title": "Fan speed switch: Auto, High, Medium or Low. The server cannot read its position."
+        },
+        {
+          "type": "lock",
+          "box": [
+            148,
+            400,
+            13,
+            22
+          ],
+          "title": "Kensington security slot"
+        },
+        {
+          "type": "fan",
+          "c": [
+            264,
+            186
+          ],
+          "r": 66
+        },
+        {
+          "type": "fan",
+          "c": [
+            462,
+            121
+          ],
+          "r": 66
+        },
+        {
+          "type": "fan",
+          "c": [
+            462,
+            272
+          ],
+          "r": 66
+        },
+        {
+          "type": "psu",
+          "c": [
+            362,
+            398
+          ],
+          "r": 34
+        },
+        {
+          "type": "inlet",
+          "box": [
+            424,
+            374,
+            32,
+            38
+          ],
+          "title": "Power input (AC in)"
+        },
+        {
+          "type": "buzzer",
+          "c": [
+            518,
+            394
+          ],
+          "r": 22
+        }
+      ]
+    }
+  }
+}

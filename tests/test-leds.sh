@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2086,SC2034,SC2015  # "check && ok || bad" is the test idiom
 # test-leds.sh - offline tests for the LED/button/driver-watchdog parts. Builds fake /sys, /proc,
 # /var/local/emhttp trees under a temp dir and runs the real scripts against them through
 # ASUSTOR_SYSROOT. Touches no hardware and no NAS. Bay layout mirrors an AS6706T (made-up disks).

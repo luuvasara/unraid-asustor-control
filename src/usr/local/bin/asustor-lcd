@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2206,SC2059  # kept as written: tested behaviour (tests/test-leds.sh, run-tests.sh); globs and word splitting here are intended
 # asustor-lcd: LCD display daemon for Asustor NAS on Unraid
 # Implements Asustor serial protocol (per mafredri/lcm) for 16x2 LCD
 set -uo pipefail

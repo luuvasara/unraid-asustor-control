@@ -1,0 +1,27 @@
+Menu="AsustorControl:6"
+Title="Report"
+Tag="bug"
+Markdown="false"
+---
+<?php
+/* Report: collect a read-only hardware report (include/report.php runs scripts/ac-report and anonymises it), preview, Copy,
+ * Download, and a link that opens an issue form in the user's own browser. Nothing is sent from the server. */
+require_once "$docroot/plugins/asustor-control/include/acs.php";
+acs_head();
+?>
+<div class="ac">
+<div class="title"><span class="left"><i class="fa fa-bug title"></i>Report unsupported hardware</span></div>
+<p class="ac-p">Is your Asustor unit not recognised, drawn wrong, a bay in the wrong place, or does the LCD, an LED or a sensor not work? Collect a hardware report here, check it, and send it as an issue. The report is made on this server and <b>anonymised before you see it</b>: serial numbers, MAC addresses, WWNs, UUIDs, labels, the hostname, IP addresses and user names become placeholders such as <code>&lt;serial-1&gt;</code>. It only leaves this server through your own browser, when you copy it, download it or open the issue form.</p>
+<div class="ac-bar">
+<input type="button" id="ac-report-collect" value="Collect report">
+<input type="button" id="ac-report-copy" value="Copy" disabled>
+<input type="button" id="ac-report-download" value="Download (.txt)" disabled>
+<input type="button" id="ac-report-issue" value="Open GitHub issue" disabled>
+<span id="ac-report-state" role="status" aria-live="polite">Nothing collected yet.</span>
+</div>
+<h3 class="ac-cap" id="ac-report-label">Report preview (anonymised; read-only)</h3>
+<textarea id="ac-report-text" aria-labelledby="ac-report-label" class="ac-report" readonly spellcheck="false" rows="22" placeholder="Click &quot;Collect report&quot;. It takes a few seconds; no drive is woken."></textarea>
+<p class="ac-p"><b>What is collected</b> (read-only, <code>scripts/ac-report</code>): the Unraid and kernel versions, DMI names and BIOS version, CPU, memory size and CPU idle driver, which Asustor modules are loaded and the LED devices, the hwmon sensor names, <code>lspci -nn</code> and <code>lspci -tvnn</code>, the ids, driver, links and PCIe error counters of every SATA and NVMe controller, the AHCI capabilities, the SATA ports with a link, each drive's model, firmware and path (no serial is read), <code>lsusb</code>, relevant <code>dmesg</code> lines and this plugin's view (bays, other drives, known issues). No drive is opened, so none can wake up.</p>
+<p class="ac-p"><b>Anonymiser</b> (<code>include/ac-anon.php</code>): first the values this server knows are replaced (drive and USB serials, DMI serials and UUID, the hostname, users with uid 1000 and up, file system labels), then patterns catch the rest (MAC, WWN, UUID, LABEL= and UUID= values, IPv4 and IPv6 addresses, serial-number fields). The same value always gets the same placeholder. Read the preview before sending, and edit the downloaded file if you see anything you would rather not share.</p>
+</div>
+<script src="/plugins/asustor-control/js/ac-report.js?v=<?=acs_h(substr((string)@md5_file("$docroot/plugins/asustor-control/js/ac-report.js"), 0, 10))?>"></script>

@@ -1,0 +1,100 @@
+{
+  "id": "asustor-as6706t",
+  "name": "Asustor AS6706T",
+  "card": "ASM1166 on the board",
+  "source": "Asustor AS6702T/AS6704T/AS6706T quick installation guide (ASUSTOR_AS67XXT_QIG_ENU_20220108_V3.pdf): six 3.5in bays side by side under the LCD panel; the bay order is the one of the platform driver's LED table (sata1..sata6) and of the plugin's LED daemon (bay N = the Nth port of the ASM1166), not measured on a unit. Board: the asustor-platform-driver identifies the AS6706T by its DMI names and the ASMedia ASM1166 [1b21:1166] SATA controller.",
+  "match": {
+    "controller": "1b21:1166",
+    "dmi": {
+      "sys_vendor": "Intel Corporation",
+      "product_name": "Jasper Lake Client Platform"
+    },
+    "controllers": 1,
+    "ports_per_controller": 6
+  },
+  "groups": {
+    "1": ["Bay 1", "Bay 2", "Bay 3", "Bay 4", "Bay 5", "Bay 6"]
+  },
+  "front": [
+    ["Bay 1", "Bay 2", "Bay 3", "Bay 4", "Bay 5", "Bay 6"]
+  ],
+  "calibration": {
+    "note": "Not measured: the bays follow the ASM1166's ports in order (port 1 = bay 1, left), as the LED daemon and the platform driver's LED table assume. Until a Locate test on a unit confirms it (LEDs and Buttons tab), every bay is labelled 'bay order not confirmed'. The plugin passes a unit's order, confirmed or corrected, as the cabling object of the unit 'none'.",
+    "port_to_position": [1, 2, 3, 4, 5, 6],
+    "port_to_position_default": true,
+    "card_port_to_group": [1],
+    "card_port_to_group_default": false
+  },
+  "bay_kinds": {
+    "Bay": "3.5in"
+  },
+  "host_view": [
+    "Fan: one 120 mm fan on the board's IT8625E controller. Its speed is readable; a fan plugin (ex. FanCtrl Plus) sets it.",
+    "LEDs and buttons: driven by the Asustor Platform Driver and this plugin's LED daemon, when the LED drivers are loaded.",
+    "LCD: driven by this plugin over a serial port.",
+    "M.2 slots: four, inside the unit under the cover; their NVMe drives are listed under the drawing."
+  ],
+  "panel": {
+    "source": "Asustor AS67XXT quick installation guide (version 4.0.0108, 2022-01-08, V3 file): LED indicators p.34 (power, system status, network, USB and hard disk LEDs on the AS6706T front), rear panel p.35 (2.5G RJ45 ports, USB 3.2 Gen 2, HDMI, reset button, K-Lock, system fan, PCI Express 3.0 expansion slot, power supply unit), LCD buttons p.36 (Up, Down, Back, Confirm right of the LCD). Units: the guide's photos measured at 300 and 220 dpi; schematic, not to scale.",
+    "note": "The LEDs and the LCD are driven by this plugin when its drivers are loaded; the drawing does not show their live state. The fan's speed is in the hardware monitor under the drawing.",
+    "front": {
+      "size": [546, 430],
+      "body": [0, 0, 546, 418],
+      "trays": [
+        {
+          "bays": ["Bay 1", "Bay 2", "Bay 3", "Bay 4", "Bay 5", "Bay 6"],
+          "x": 110,
+          "y": 128,
+          "w": 60,
+          "h": 284,
+          "step": 65.5,
+          "led": "above",
+          "led_title": "%s LED: green = a drive is in the bay, blinking = activity; red = Unraid reports a fault. Driven by this plugin's LED daemon (LEDs and Buttons tab)."
+        }
+      ],
+      "parts": [
+        { "type": "side", "box": [4, 4, 88, 408], "text": "AS6706T" },
+        { "type": "cage", "box": [103, 3, 441, 100] },
+        { "type": "lcd", "box": [273, 28, 165, 44], "title": "LCD panel: two lines of text, driven by this plugin (LCD tab)." },
+        { "type": "buttons", "box": [456, 8, 85, 88], "rows": 2, "cols": 2, "title": "LCD buttons: Up, Back (top), Down, Confirm (bottom). They run the LCD menu of Asustor's own firmware; this plugin does not read them." },
+        {
+          "type": "leds",
+          "x": [43, 43, 16, 16, 30],
+          "y": [55, 82, 290, 303, 348],
+          "names": ["power", "status", "LAN", "", "USB"],
+          "titles": [
+            "Power LED: blue = on.",
+            "System status LED: green steady = array started, slow blink = parity check or rebuild, fast blink = array stopped; red = a disk is disabled, invalid or missing.",
+            "Network LED: blue = a network port is connected.",
+            "Network LED: blue = a network port is connected.",
+            "USB LED: green = a USB device in the front port."
+          ],
+          "note": "Driven by the Asustor Platform Driver and this plugin's LED daemon when the LED drivers are loaded."
+        },
+        { "type": "port", "box": [13, 362, 36, 16], "label": "USB", "label_at": "below", "title": "USB 3.2 Gen 2 port (front)" }
+      ]
+    },
+    "rear": {
+      "size": [522, 400],
+      "body": [0, 0, 522, 388],
+      "notes": [
+        "Fan: one 120 mm fan on the board's fan controller; its speed is under the drawing.",
+        "A fan plugin (ex. FanCtrl Plus) sets the speed; this plugin only reads it.",
+        "LAN, USB and HDMI are Unraid's own; the PCIe slot takes an optional 10GbE card."
+      ],
+      "parts": [
+        { "type": "recess", "box": [48, 10, 169, 94] },
+        { "type": "inlet", "box": [57, 29, 46, 62], "title": "Power input (AC in) of the internal 250 W power supply" },
+        { "type": "psu", "c": [179, 60], "r": 31, "title": "Power supply fan" },
+        { "type": "port", "box": [348, 29, 90, 25], "label": "PCIe slot", "label_at": "below", "title": "PCI Express 3.0 expansion slot (cover): for an optional 10GbE card" },
+        { "type": "fan", "c": [241, 248], "r": 119, "title": "System fan, 120 mm: on the board's IT8625E controller. Its speed is readable (hardware monitor, History); a fan plugin sets it." },
+        { "type": "port", "box": [460, 70, 35, 34], "label": "LAN 1", "title": "2.5G RJ45 port 1" },
+        { "type": "port", "box": [460, 122, 35, 35], "label": "LAN 2", "title": "2.5G RJ45 port 2" },
+        { "type": "port", "box": [479, 179, 16, 25], "label": "USB", "title": "USB 3.2 Gen 2 port (rear)" },
+        { "type": "port", "box": [479, 279, 18, 25], "label": "HDMI", "title": "HDMI 2.0b port" },
+        { "type": "port", "box": [486, 322, 7, 7], "label": "reset", "title": "Reset button" },
+        { "type": "lock", "box": [425, 364, 13, 10], "title": "K-Lock (Kensington) slot" }
+      ]
+    }
+  }
+}

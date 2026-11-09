@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2207,SC2004,SC2321,SC2034,SC2015,SC2162  # kept as written: tested behaviour (tests/test-leds.sh, run-tests.sh); globs and word splitting here are intended
 # asustor-leds: front-panel LEDs for Asustor NAS units (AS6706T and relatives) on Unraid.
 #
 # Needs the LED class devices that leds-gpio creates from the asustor platform driver

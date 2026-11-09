@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2015  # kept as written: tested behaviour (tests/test-leds.sh, run-tests.sh); globs and word splitting here are intended
 # asustor-kmods {status|install|load|remove} - optional LED/button kernel-module add-on.
 #
 # Unraid's kernel ships no leds-gpio / gpio-keys-polled, so the LED and button devices that the

@@ -170,7 +170,7 @@ function pid_alive($pidfile) {
 
 define('LEDCFG', '/boot/config/plugins/asustor-control/leds.cfg');
 $LED_DEFAULTS = ['leds_enabled' => 'yes', 'activity_poll_ms' => '200', 'bay_ports' => 'auto',
-                 'copy_short' => 'log', 'copy_long' => 'log', 'long_press_s' => '3', 'kmods' => 'no'];
+                 'copy_short' => 'log', 'copy_long' => 'log', 'long_press_s' => '3', 'kmods' => 'no', 'bay_order_confirmed' => 'no'];
 $BUTTON_ACTIONS = ['none', 'log', 'notify', 'locate', 'script'];
 
 function read_led_cfg() {
@@ -315,7 +315,7 @@ switch ($action) {
 
     case 'saveLedConfig':
         $cfg = read_led_cfg();
-        foreach (['leds_enabled', 'kmods'] as $k) if (isset($_POST[$k])) $cfg[$k] = $_POST[$k] === 'yes' ? 'yes' : 'no';
+        foreach (['leds_enabled', 'kmods', 'bay_order_confirmed'] as $k) if (isset($_POST[$k])) $cfg[$k] = $_POST[$k] === 'yes' ? 'yes' : 'no';
         foreach (['copy_short', 'copy_long'] as $k) if (isset($_POST[$k]) && in_array($_POST[$k], $BUTTON_ACTIONS, true)) $cfg[$k] = $_POST[$k];
         if (isset($_POST['long_press_s'])) $cfg['long_press_s'] = (string)max(1, min(30, (int)$_POST['long_press_s']));
         if (isset($_POST['activity_poll_ms'])) $cfg['activity_poll_ms'] = (string)max(50, min(2000, (int)$_POST['activity_poll_ms']));
@@ -324,9 +324,12 @@ switch ($action) {
             $cfg['bay_ports'] = ($bp === '' || $bp === 'auto' || !preg_match('/^\d{1,3}(,\d{1,3}){0,5}$/', $bp)) ? 'auto' : $bp;
         }
         write_led_cfg($cfg);
+        // the drawing and the Main page labels follow the same bay order (kit enclosure cabling, unit "none")
+        require_once __DIR__ . '/acs.php';
+        $order = acs_save_bay_order($cfg['bay_ports'], $cfg['bay_order_confirmed'] === 'yes');
         shell_exec('/etc/rc.d/rc.asustor-control restart_leds 2>&1');
-        ac_log('Saved LED/button config');
-        echo json_encode(['status' => 'ok']);
+        ac_log('Saved LED/button config' . ($cfg['bay_order_confirmed'] === 'yes' ? ' (bay order confirmed)' : ''));
+        echo json_encode(['status' => $order['ok'] ? 'ok' : 'error', 'note' => $order['note']]);
         break;
 
     case 'kmodsInstall':

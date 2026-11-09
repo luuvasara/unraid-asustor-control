@@ -1,0 +1,29 @@
+Menu="AsustorControl:4"
+Title="History"
+Tag="line-chart"
+Markdown="false"
+---
+<?php
+/* History: CPU and hottest-drive temperature and the fan over time, from the chart file asustor-hwmon keeps in RAM (one sample
+ * every 30 s, 12 h). Graphs: uPlot 1.6.32 (MIT), shipped in vendor/; the page loads nothing from the internet. The same
+ * numbers as text: the table under the graphs. The full record is the behaviour log in appdata (docs/hwlog-format.md). */
+require_once "$docroot/plugins/asustor-control/include/acs.php";
+acs_head();
+$ac_hv = substr((string)@md5_file("$docroot/plugins/asustor-control/js/ac-charts.js"), 0, 10);
+?>
+<link rel="stylesheet" href="/plugins/asustor-control/vendor/uplot-1.6.32/uPlot.min.css">
+<div class="ac" id="ac-history" data-endpoint="/plugins/asustor-control/include/history.php">
+<div class="title"><span class="left"><i class="fa fa-line-chart title"></i>Temperatures and fan</span></div>
+<div class="ac-bar">
+<fieldset class="ac-range"><legend>Time range</legend>
+<label><input type="radio" name="ac-range" value="3600" checked> 1 h</label>
+<label><input type="radio" name="ac-range" value="21600"> 6 h</label>
+<label><input type="radio" name="ac-range" value="43200"> 12 h</label>
+</fieldset>
+</div>
+<p class="ac-p" data-ac="msg" role="status" aria-live="polite"><noscript>The graphs need JavaScript.</noscript></p>
+<div data-ac="charts"></div>
+<p class="ac-p">One sample every 30 seconds from the hardware monitor: the CPU's hottest core, the hottest drive Unraid last read (no drive is woken), the fan's PWM in percent and its speed. The dashed lines are Unraid's warning and critical drive temperatures. Kept in RAM for 12 hours; it starts empty at every boot. The behaviour log in appdata keeps 30 days in more detail. Hover a graph for the values at that time.</p>
+</div>
+<script src="/plugins/asustor-control/vendor/uplot-1.6.32/uPlot.iife.min.js"></script>
+<script src="/plugins/asustor-control/js/ac-charts.js?v=<?=acs_h($ac_hv)?>"></script>

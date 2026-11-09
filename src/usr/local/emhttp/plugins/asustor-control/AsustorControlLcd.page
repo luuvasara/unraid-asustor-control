@@ -1,8 +1,9 @@
-Menu="AsustorControl:1"
-Title="LCD Settings"
+Menu="AsustorControl:2"
+Title="LCD"
 Tag="tv"
 Markdown="false"
 ---
+<?php require_once "$docroot/plugins/asustor-control/include/acs.php"; acs_head(); ?>
 <div id="tab-lcd">
 
     <dl>
@@ -13,7 +14,7 @@ Markdown="false"
         </select></dd>
     </dl>
     <blockquote class="inline_help">
-        Enable or disable the LCD display daemon.
+        Enable or disable the LCD display daemon, ex. No to leave the panel dark at night.
     </blockquote>
 
     <dl>
@@ -21,7 +22,7 @@ Markdown="false"
         <dd><input type="text" id="cfg-lcd-port" value="/dev/ttyS1" size="20"></dd>
     </dl>
     <blockquote class="inline_help">
-        Serial device for the Asustor LCD panel. Usually /dev/ttyS1.
+        Serial device for the Asustor LCD panel, ex. /dev/ttyS1 (the AS6706T's port); change it only if the panel stays blank.
     </blockquote>
 
     <dl>
@@ -29,7 +30,7 @@ Markdown="false"
         <dd><input type="number" id="cfg-lcd-cycle" min="1" max="60" value="5" size="5"> seconds</dd>
     </dl>
     <blockquote class="inline_help">
-        Time in seconds between LCD screen rotations.
+        Time in seconds between LCD screen rotations, ex. 5; longer to read each screen at leisure.
     </blockquote>
 
     <dl>
@@ -44,7 +45,7 @@ Markdown="false"
         </dd>
     </dl>
     <blockquote class="inline_help">
-        Select which screens to include in the LCD rotation cycle.
+        Select which screens to include in the LCD rotation cycle, ex. Hostname and IP Address only, to find the server on the network.
     </blockquote>
 
     <dl>

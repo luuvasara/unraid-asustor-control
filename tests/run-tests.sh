@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2015,SC2231,SC2012,SC2016  # "check && ok || bad" is the test idiom; php/python code is single-quoted on purpose
 # run-tests.sh - offline checks; touches no NAS, no serial port and no hardware.
 # Checks: every script parses, PHP lints, the .plg is well-formed XML, its version/md5 match the
 # package in packages/, its URLs point at this repository, and tools/hwlog-report.py runs on a sample log
@@ -113,9 +114,17 @@ ips = set(re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", text))
 assert ips <= {"192.0.2.10"}, ips
 PY
 else bad "harness mkfixture.py"; fi
-bash -n "$HERE"/tests/harness/serve.sh && ok "bash -n serve.sh" || bad "bash -n serve.sh"
-if command -v php >/dev/null; then php -l "$HERE"/tests/harness/router.php >/dev/null 2>&1 && ok "php -l router.php" || bad "php -l router.php"; fi
-if command -v node >/dev/null; then node --check "$HERE"/tests/harness/shot.cjs && ok "node --check shot.cjs" || bad "node --check shot.cjs"; fi
+bash -n "$HERE"/tests/mkserver.sh && bash -n "$HERE"/tests/render-test.sh && ok "bash -n mkserver.sh render-test.sh" || bad "bash -n mkserver/render-test"
+if command -v node >/dev/null; then for f in "$HERE"/src/usr/local/emhttp/plugins/$NAME/js/*.js; do node --check "$f" && ok "node --check $(basename "$f")" || bad "node --check $f"; done; fi
+bash -n "$HERE"/src/usr/local/emhttp/plugins/$NAME/scripts/ac-report && ok "bash -n ac-report" || bad "bash -n ac-report"
+# the collector is read-only: no drive command, no write
+if grep -v '^#' "$HERE"/src/usr/local/emhttp/plugins/$NAME/scripts/ac-report | grep -nE '\b(smartctl|hdparm|sg_[a-z]+|dd|setpci|tee|mknod)\b|>>? *"?[$/]' | grep -v '/dev/null'; then bad "ac-report: a command that could touch a device or write"; else ok "ac-report: no device command, no write"; fi
+# the page pieces: tabs in the sibling order, the Main page labels, the AS6706T profile from the kit
+for t in AsustorControlOverview:1 AsustorControlLcd:2 AsustorControlLeds:3 AsustorControlHistory:4 AsustorControlHardware:5 AsustorControlReport:6; do
+  grep -q "^Menu=\"AsustorControl:${t#*:}\"" "$HERE/src/usr/local/emhttp/plugins/$NAME/${t%%:*}.page" && ok "tab ${t%%:*} at ${t#*:}" || bad "tab order ${t%%:*}"
+done
+grep -q "plugins/$NAME/AsustorControlBadges.page" <<<"$LIST" && grep -q "plugins/$NAME/kit/enclosures/asustor-as6706t.json" <<<"$LIST" && ok "package holds the Main page labels and the AS6706T profile" || bad "package: badges page or profile"
+php "$HERE"/kit/bin/page-scope.php "$HERE"/src/usr/local/emhttp/plugins/$NAME/*.page && ok "pages keep out of the page layout's variables" || bad "page scope"
 README=$HERE/README.md; [ -f "$README" ] || README=$HERE/README.public.md   # the private tree keeps it as README.public.md
 for f in "$HERE"/docs/screenshots/*.png; do grep -q "($(basename "$f"))\|/$(basename "$f"))" "$README" && ok "README shows $(basename "$f")" || bad "README does not reference $f"; done
 

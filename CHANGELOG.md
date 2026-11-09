@@ -2,6 +2,16 @@
 
 Copied by the build from the <CHANGES> block of asustor-control.plg; edit the .plg, not this file.
 
+## 2026.11.09a
+- New Overview tab: the AS6706T drawn as it looks, front and rear, after Asustor's installation guide, with each bay's drive, temperature and state, live. The hardware monitor, drive temperatures, LCD preview, action log and actions are on the same tab, as before.
+- Bay labels on the Main page: each drive in a bay shows "Bay 1" to "Bay 6" after its name. They can be switched off on the Overview.
+- The bay order (bay N = the controller's port N) is marked "not confirmed" until you check it with Locate and set Bay order confirmed on the LEDs and Buttons tab. A corrected bay order there now moves the drawing and the Main page labels too.
+- New History tab: CPU and hottest-drive temperature, fan PWM and speed over 1, 6 or 12 hours, with Unraid's warning and critical lines and a table of the same numbers. It replaces the fan chart of the old status tab.
+- New Hardware tab: board, BIOS and CPU, which Asustor drivers are loaded, the SATA controller's link and error counters, each drive's port, firmware and SMART counters, known issues checked on this server, and firmware.
+- New Report tab: an anonymised hardware report to copy, download or send as an issue.
+- Tabs now read Overview, LCD, LEDs and Buttons, History, Hardware, Report, About, like the QNAP and Synology plugins.
+- On a server that is not an AS6706T, the drawing and the bay labels are left out and the page says why; everything else works as before.
+
 ## 2026.11.06a
 - New About tab: the installed version, the latest changes and links. Updates print the latest changes in a box at the end of the install output.
 - The page is now four tabs of Unraid's own tab bar: Asustor Control (status), LCD Settings, LEDs and Buttons, About. What each tab shows is unchanged.

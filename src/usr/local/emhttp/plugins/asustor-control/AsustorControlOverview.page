@@ -1,0 +1,109 @@
+Menu="AsustorControl:1"
+Title="Overview"
+Tag="tachometer"
+Markdown="false"
+---
+<?php
+/* Overview: the unit drawn as it looks (front and rear, the bays live), the bay map, the hardware monitor, every drive's
+ * temperature, the LCD, the action log and the plugin's health. Read-only except the settings form (Unraid's /update.php) and
+ * the Actions buttons (include/ajax.php). On a server that is not an AS6706T the drawing and the bay map are left out. */
+require_once "$docroot/plugins/asustor-control/include/acs.php";
+acs_head();
+$ac_v = acs_view(); $ac_c = acs_cfg();
+$ac_smart = ['healthy' => 'fa-thumbs-o-up green-text', 'error' => 'fa-thumbs-o-down orange-text', 'failed' => 'fa-thumbs-o-down red-text'];
+$ac_ver = trim((string)@shell_exec('plugin version /boot/config/plugins/asustor-control.plg 2>/dev/null')) ?: 'unknown';
+?>
+<div class="enc ac" data-endpoint="/plugins/asustor-control/kit/enclosures.php">
+<!-- shown when the Asustor kernel drivers are missing (asustor-drivercheck) -->
+<div id="ac-driver-banner" class="ac-banner ac-banner-error" style="display:none" role="alert">
+    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+    <div><strong id="ac-driver-title">Asustor kernel drivers missing</strong>
+    <div id="ac-driver-msg"></div></div>
+</div>
+<div id="ac-status" class="ac-status-bar ac-status-ok">
+    <span id="ac-lcd-dot" class="ac-dot ac-dot-grey"></span>
+    <strong id="ac-status-text">Loading...</strong>
+    <span class="ac-version">v<?=acs_h($ac_ver)?></span>
+</div>
+
+<?php if (!$ac_v['units']): ?>
+<div class="title"><span class="left"><i class="fa fa-th title"></i>Bays</span></div>
+<p class="ac-p"><i class="fa fa-info-circle" aria-hidden="true"></i> This server is not an Asustor AS6706T, or its SATA controller is not seen: the drawing of the unit and the bay labels need the AS6706T's board and its ASMedia ASM1166 controller. The hardware monitor, the LCD and the LEDs below work on any unit the Asustor drivers support.</p>
+<?php endif; ?>
+<?php foreach ($ac_v['units'] as $ac_u):
+  $ac_temps = array_filter(array_column($ac_u['bays'], 'temp'), 'is_int'); $ac_hot = $ac_temps ? max($ac_temps) : null;
+  $ac_hotBay = ''; foreach ($ac_u['bays'] as $ac_b) if ($ac_b['temp'] === $ac_hot && $ac_hot !== null) { $ac_hotBay = $ac_b['bay']; break; }
+  $ac_n = count(array_filter($ac_u['bays'], function ($b) { return $b['device'] !== ''; }));
+  $ac_sb = count(array_filter($ac_u['bays'], function ($b) { return $b['standby']; }));
+  $ac_bad = array_filter($ac_u['bays'], function ($b) { return in_array($b['smart']['state'], ['error', 'failed'], true) || in_array($b['state'], ['disabled', 'missing', 'invalid'], true); }); ?>
+<div class="title"><span class="left"><i class="fa fa-th title"></i><?=acs_h($ac_u['name'])?></span><span class="ac-sub">six bays on the ASM1166 SATA controller at <?=acs_h($ac_u['controllers'][0] ?? '-')?></span></div>
+<?=enclosure_front_html($ac_u)?>
+<dl class="ac-facts">
+  <dt>Drives</dt><dd><?=acs_h("$ac_n in " . count($ac_u['bays']) . ' bays' . ($ac_sb ? ", $ac_sb in standby" : ''))?></dd>
+  <dt>Hottest drive</dt><dd><?=acs_h($ac_hot !== null ? "$ac_hot °C in $ac_hotBay" : 'no reading (drives in standby are not woken)')?></dd>
+  <dt>Health</dt><dd><?php if ($ac_bad): ?><i class="fa fa-warning orange-text" aria-hidden="true"></i> <?=acs_h(implode(', ', array_map(function ($b) { return "{$b['bay']}: " . (in_array($b['smart']['state'], ['error', 'failed'], true) ? "SMART {$b['smart']['text']}" : $b['state_text']); }, $ac_bad)))?><?php else: ?><i class="fa fa-check green-text" aria-hidden="true"></i> no drive with errors<?php endif; ?></dd>
+  <dt>Bay order</dt><dd><?php if ($ac_u['confirmed']): ?><i class="fa fa-check green-text" aria-hidden="true"></i> confirmed with Locate<?php else: ?><i class="fa fa-info-circle" aria-hidden="true"></i> not confirmed: bay N is taken to be the controller's port N. Check it with Locate on the LEDs and Buttons tab, then set Bay order confirmed there.<?php endif; ?></dd>
+</dl>
+<div class="ac-scroll"><table class="unraid ac-t">
+<caption class="ac-cap">Bay map</caption>
+<thead><tr><th scope="col">Bay</th><th scope="col">Device</th><th scope="col">Slot</th><th scope="col">Model</th><th scope="col">Size</th><th scope="col">Temp.</th><th scope="col">State</th><th scope="col">SMART</th></tr></thead><tbody>
+<?php foreach ($ac_u['bays'] as $ac_b): ?>
+<tr><th scope="row"><?=acs_h($ac_b['bay'])?></th>
+<?php if ($ac_b['device'] === ''): ?><td colspan="7">empty</td>
+<?php else: ?><td><?=acs_h($ac_b['device'])?></td><td><?=acs_h($ac_b['slot'] ?: '-')?></td><td><?=acs_h($ac_b['model'])?></td><td><?=acs_h(enclosure_size($ac_b['size']))?></td>
+<td><?=acs_h(enclosure_temp_text($ac_b))?></td><td><i class="fa <?=ENCLOSURE_ICON[$ac_b['state']] ?? ''?>" aria-hidden="true"></i> <?=acs_h($ac_b['state_text'])?></td>
+<td title="<?=acs_h($ac_b['smart']['title'])?>"><?php if (isset($ac_smart[$ac_b['smart']['state']])): ?><i class="fa <?=$ac_smart[$ac_b['smart']['state']]?>" aria-hidden="true"></i> <?php endif; ?><?=acs_h($ac_b['smart']['text'])?></td><?php endif; ?></tr>
+<?php endforeach; ?>
+</tbody></table></div>
+<?php endforeach; ?>
+
+<div class="title"><span class="left"><i class="fa fa-tachometer title"></i>Hardware monitor</span></div>
+<table class="unraid ac-t ac-mon">
+    <tbody>
+        <tr><th scope="row">Fan PWM</th><td id="st-fan-pwm">--</td></tr>
+        <tr><th scope="row">Fan PWM level</th><td><div class="ac-pwm-bar"><div class="ac-pwm-fill" id="st-pwm-bar" style="width:0%"></div></div></td></tr>
+        <tr><th scope="row">Fan RPM</th><td id="st-fan-rpm">--</td></tr>
+        <tr><th scope="row">CPU temperature</th><td id="st-cpu-temp">--</td></tr>
+        <tr><th scope="row">Hottest drive</th><td id="st-drive-temp">--</td></tr>
+        <tr><th scope="row">Behaviour log</th><td id="st-hwlog">--</td></tr>
+    </tbody>
+</table>
+<p class="ac-p">The fan's speed is set by your fan plugin (ex. FanCtrl Plus); this plugin only reads it. The History tab shows the last hours.</p>
+
+<div class="ac-scroll"><table class="unraid ac-t ac-mon">
+<caption class="ac-cap">Drive temperatures (bays, M.2 slots inside the unit, other drives)</caption>
+<tbody id="st-drive-list"><tr><td colspan="2">Loading...</td></tr></tbody>
+</table></div>
+
+<div class="title"><span class="left"><i class="fa fa-television title"></i>LCD display</span></div>
+<table class="unraid ac-t ac-mon">
+    <tbody>
+        <tr><th scope="row">Status</th><td id="st-lcd-status">--</td></tr>
+        <tr><th scope="row">Current screen</th><td id="st-lcd-screen">--</td></tr>
+        <tr><th scope="row">Port</th><td id="st-lcd-port">--</td></tr>
+        <tr><th scope="row">Preview</th><td><div class="ac-lcd-preview" aria-live="off"><div id="lcd-line1">Loading...</div><div id="lcd-line2">&nbsp;</div></div></td></tr>
+    </tbody>
+</table>
+
+<form class="ac-set" method="POST" action="/update.php" target="progressFrame">
+<input type="hidden" name="#file" value="asustor-control/asustor-control.cfg">
+<fieldset><legend>Settings</legend>
+<div class="ac-field"><label for="ac-set-badges">Bay labels on the Main page</label>
+<select id="ac-set-badges" name="MAIN_BADGES" aria-describedby="ac-badges-help"><option value="yes"<?=$ac_c['MAIN_BADGES'] === 'yes' ? ' selected' : ''?>>Yes</option><option value="no"<?=$ac_c['MAIN_BADGES'] === 'no' ? ' selected' : ''?>>No</option></select></div>
+<p class="ac-p" id="ac-badges-help">Shows the bay after each drive's name on the Main page, ex. "Bay 3", so a drive in the list is found in the unit. Visual only; reload the Main page after Apply.</p>
+<div class="ac-field"><input type="submit" value="Apply"></div>
+</fieldset>
+</form>
+
+<div class="title"><span class="left"><i class="fa fa-list title"></i>Action log</span></div>
+<div id="ac-action-log" class="ac-log" tabindex="0" aria-label="Action log">Loading...</div>
+<div class="title"><span class="left"><i class="fa fa-wrench title"></i>Actions</span></div>
+<div class="ac-bar">
+    <button type="button" onclick="doAction('restartLcd')" class="ac-btn ac-btn-primary">Restart LCD</button>
+    <button type="button" onclick="doAction('stopLcd')" class="ac-btn ac-btn-danger">Stop LCD</button>
+    <button type="button" onclick="doAction('ledOn')" class="ac-btn ac-btn-primary">LED On</button>
+    <button type="button" onclick="doAction('ledOff')" class="ac-btn ac-btn-danger">LED Off</button>
+    <label class="ac-auto"><input type="checkbox" id="ac-auto-refresh" checked> Auto-refresh (10 s)</label>
+</div>
+</div>
+<script src="/plugins/asustor-control/kit/enclosures.js?v=<?=acs_h(substr((string)@md5_file("$docroot/plugins/asustor-control/kit/enclosures.js"), 0, 10))?>"></script>

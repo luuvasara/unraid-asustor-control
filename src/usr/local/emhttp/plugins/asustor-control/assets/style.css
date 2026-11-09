@@ -1,4 +1,36 @@
-/* Asustor Control — minimal CSS, inherits Unraid theme */
+/* Asustor Control. Unraid's own table, form and text-colour classes; the layout classes below set no text or page colour
+ * (borders use currentColor), so all four themes work. Spacing on a 4 px grid, as the QNAP and Synology Hardware plugins.
+ * The drawing of the unit comes from kit/enclosures.css. */
+.ac .ac-p { max-width: 62em; margin: 8px 0 12px; text-align: left; }
+.ac .ac-sub { margin-left: 16px; font-weight: normal; }
+.ac .ac-small { font-weight: normal; }
+.ac .ac-cap { caption-side: top; text-align: left; font-weight: bold; font-size: 1em; padding: 8px 0 4px; margin: 0; }
+.ac .ac-scroll { overflow-x: auto; margin: 0 0 16px; }
+.ac table.ac-t { width: 100%; margin: 0 0 16px; }
+.ac .ac-scroll table.ac-t { margin: 0; }
+.ac table.ac-t th[scope=row] { text-align: left; font-weight: bold; vertical-align: top; }
+.ac table.ac-t td { vertical-align: top; white-space: normal; }
+.ac table.ac-mon th[scope=row] { width: 16em; }
+.ac table.ac-issues th[scope=row] { width: 18em; }
+.ac dl.ac-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 8px 0 16px; max-width: 72em; }
+.ac dl.ac-facts dt, .ac dl.ac-facts dd { display: block; margin: 0; padding: 0; width: auto; float: none; text-align: left; }
+.ac dl.ac-facts dt { font-weight: bold; }
+.ac fieldset { border: 1px solid currentColor; border-radius: 4px; padding: 8px 16px; margin: 16px 0; max-width: 62em; }
+.ac legend { font-weight: bold; padding: 0 4px; }
+.ac .ac-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0; }
+.ac .ac-field label { flex: 0 0 18em; margin: 0; }
+.ac .ac-field select, .ac .ac-field input { margin: 0; width: auto; min-width: 8em; }
+.ac .ac-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
+.ac .ac-bar input, .ac .ac-bar button { margin: 0; }
+.ac .ac-auto { margin: 0 0 0 8px; }
+.ac .ac-range { display: flex; gap: 16px; border: 1px solid currentColor; border-radius: 4px; padding: 4px 12px; margin: 0; }
+.ac .ac-range label { margin: 0; }
+.ac .ac-hist { margin: 0 0 24px; }
+.ac table.ac-hist-t { width: auto; min-width: 32em; }
+.ac .ac-chart { max-width: 1200px; }
+.ac .uplot, .ac .u-legend { color: inherit; }
+.ac .ac-report { width: 100%; max-width: 72em; font-family: monospace; font-size: 0.9em; box-sizing: border-box; }
+.ac .ac-log { font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto; border: 1px solid currentColor; border-radius: 4px; padding: 4px 8px; margin: 0 0 16px; max-width: 120em; }
 
 /* Status bar */
 .ac-status-bar {
@@ -62,25 +94,6 @@
     letter-spacing: 2px;
     min-height: 60px;
     display: inline-block;
-}
-
-/* Fan history chart canvas */
-.ac-fan-curve {
-    width: 100%;
-    height: 180px;
-    border: 1px solid var(--border-color, #ccc);
-    border-radius: 4px;
-    margin-top: 8px;
-}
-
-/* Chart legend */
-.ac-legend {
-    display: flex;
-    gap: 14px;
-    flex-wrap: wrap;
-    font-size: 11px;
-    color: var(--alt-text-color);
-    margin-top: 6px;
 }
 
 /* Action buttons */

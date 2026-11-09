@@ -42,7 +42,7 @@ now = hist[-1]
 status = {
     "hw": {
         "pwm": now["pwm"], "rpm": now["rpm"], "cpu_temp": 52, "max_drive_temp": 43,
-        "drive_temps": {"sda": 35, "sdb": 36, "sdc": 34, "sdd": 37, "nvme0n1": 39, "nvme1n1": 43},
+        "drive_temps": {"sdb": 40, "sdc": 39, "sdd": 41, "sdf": 43, "sdg": 39, "nvme0n1": 38, "nvme1n1": 43},
         "hwmon": "hwmon3",
     },
     "lcd": {"timestamp": "2026-01-01T04:59:50+0000", "current_screen": "temps", "line1": "Disk:43C",
@@ -56,14 +56,14 @@ status = {
                 "message": "Asustor drivers loaded on kernel 6.18.58-Unraid."},
 }
 
-# LEDs & Buttons tab: five made-up disks in six bays, one marked disabled (red LED), bay 2 being located
+# LEDs and Buttons tab: six made-up disks in six bays (as the kit's AS6706T fixture), bay 2 being located
 bays = [{"bay": 1, "dev": "sdb", "name": "parity", "status": "DISK_OK", "fault": 0},
         {"bay": 2, "dev": "sdc", "name": "disk1", "status": "DISK_OK", "fault": 0},
-        {"bay": 3, "dev": "sdd", "name": "disk2", "status": "DISK_DSBL", "fault": 1},
+        {"bay": 3, "dev": "sdd", "name": "disk2", "status": "DISK_OK", "fault": 0},
         {"bay": 4, "dev": "sde", "name": "disk3", "status": "DISK_OK", "fault": 0},
         {"bay": 5, "dev": "sdf", "name": "disk4", "status": "DISK_OK", "fault": 0},
-        {"bay": 6, "dev": "", "name": "", "status": "", "fault": 0}]
-leds = {"leds": {"ts": now["ts"], "array": "started", "faults": 1, "locate_bay": 2, "locate_left": 24, "poll_ms": 200,
+        {"bay": 6, "dev": "sdg", "name": "parity2", "status": "DISK_OK", "fault": 0}]
+leds = {"leds": {"ts": now["ts"], "array": "started", "faults": 0, "locate_bay": 2, "locate_left": 24, "poll_ms": 200,
                  "bays": bays},
         "buttons": {"device": "/dev/input/event2", "last": "copy short 300ms log", "ts": now["ts"]},
         "leds_running": True, "buttons_running": True, "led_class": True,

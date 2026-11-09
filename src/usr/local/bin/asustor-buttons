@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2034,SC2155,SC2329  # kept as written: tested behaviour (tests/test-leds.sh, run-tests.sh); globs and word splitting here are intended
 # asustor-buttons: front-panel button actions for Asustor NAS units on Unraid.
 #
 # gpio-keys-polled turns the asustor platform driver's button GPIOs into the input device

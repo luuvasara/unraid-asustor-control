@@ -1,0 +1,95 @@
+/* Enclosures tab. Unraid's own table, form and text-colour classes; nothing here sets a text or page colour (borders use
+ * currentColor), so all four themes work. Spacing on a 4 px grid. */
+.enc .enc-p { max-width: 62em; margin: 4px 0 12px; text-align: left; }
+.enc .enc-sub { margin-left: 16px; font-weight: normal; }
+.enc .enc-cap { caption-side: top; text-align: left; font-weight: bold; padding: 8px 0 4px; }
+.enc .enc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.enc .enc-front { margin: 8px 0 16px; max-width: 72em; }
+.enc .enc-chassis { border: 2px solid currentColor; border-radius: 4px; padding: 8px; display: grid; gap: 8px; }
+.enc .enc-row { display: grid; grid-template-columns: repeat(var(--enc-cols, 8), minmax(6.5em, 1fr)); gap: 4px; list-style: none; margin: 0; padding: 0; }
+.enc .enc-row .enc-bay { display: flex; flex-direction: column; gap: 2px; min-height: 6em; margin: 0; padding: 4px 8px; border: 1px solid currentColor; border-radius: 2px; font-size: 0.9em; line-height: 1.5; }
+.enc .enc-row .enc-bay.enc-empty { border-style: dashed; }
+.enc .enc-row .enc-bay:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.enc .enc-row .enc-bay.enc-locating { outline: 3px solid currentColor; outline-offset: 2px; }
+.enc .enc-row .enc-bay.enc-disabled, .enc .enc-row .enc-bay.enc-missing, .enc .enc-row .enc-bay.enc-invalid { border-width: 3px; }
+.enc .enc-bay-name { font-weight: bold; }
+.enc .enc-bay-dev, .enc .enc-bay-slot, .enc .enc-bay-temp, .enc .enc-bay-empty { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.enc .enc-bay-empty { font-style: italic; }
+.enc .enc-scroll { overflow-x: auto; margin: 0 0 8px; }
+.enc table.enc-t { width: 100%; margin: 0; }
+.enc table.enc-t th[scope=row] { text-align: left; font-weight: bold; }
+.enc table.enc-t td, .enc table.enc-t th { vertical-align: top; }
+.enc table.enc-t td.enc-act { white-space: nowrap; text-align: right; }
+.enc table.enc-t td.enc-act input { margin: 0; padding: 2px 8px; }
+.enc .enc-msg { min-height: 1.5em; margin: 4px 0 16px; max-width: 62em; }
+.enc .enc-bad { font-weight: bold; }
+.enc fieldset { border: 1px solid currentColor; border-radius: 4px; padding: 8px 16px; margin: 8px 0 16px; max-width: 62em; }
+.enc legend { font-weight: bold; padding: 0 4px; }
+.enc .enc-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0; }
+.enc .enc-field label { flex: 0 0 18em; margin: 0; }
+.enc .enc-field select, .enc .enc-field input { margin: 0; width: auto; min-width: 12em; flex: 0 1 auto; }
+.enc .enc-notes { margin: 0 0 16px; max-width: 62em; }
+.enc .enc-notes summary { cursor: pointer; font-weight: bold; }
+.enc .enc-notes li { margin: 4px 0; }
+
+/* The drawing of a unit (enclosure_panel_html): inline SVG. Text, lines and fills come from the theme's text colour
+ * (currentColor, mixed with transparent for the fills), so every theme gets its own drawing. Fixed colours only for Unraid's
+ * drive states (the bar in each tray; the state is also in the tray's text, its title and the table). */
+.enc .enc-panel { --enc-unit: color-mix(in srgb, currentColor 5%, transparent); --enc-tray: color-mix(in srgb, currentColor 13%, transparent);
+  --enc-part: color-mix(in srgb, currentColor 22%, transparent); --enc-line: color-mix(in srgb, currentColor 55%, transparent);
+  --enc-active: #0ca30c; --enc-standby: #8a8983; --enc-new: #3987e5; --enc-invalid: #fab219; --enc-bad: #d03b3b; --enc-warn: #e68a00; --enc-on: #3987e5;
+  max-width: 140rem; }
+.enc .enc-panel-wrap { width: 100%; overflow-x: auto; }
+.enc .enc-svg { display: block; width: 100%; min-width: 72rem; height: auto; font-family: clear-sans, sans-serif; }
+.enc .enc-svg text { fill: currentColor; font-size: 10px; }
+.enc .enc-svg .enc-t-head { font-size: 12px; font-weight: bold; }
+.enc .enc-svg .enc-t-bay { font-size: 11px; font-weight: bold; }
+.enc .enc-svg .enc-t-temp { font-size: 16px; font-weight: bold; }
+.enc .enc-svg .enc-t-dev { font-size: 11px; }
+.enc .enc-svg .enc-t-slot { font-size: 10px; }
+.enc .enc-svg .enc-tray-s .enc-t-bay { font-size: 8.5px; }
+.enc .enc-svg .enc-tray-s .enc-t-temp { font-size: 12px; }
+.enc .enc-svg .enc-tray-s .enc-t-dev, .enc .enc-svg .enc-tray-s .enc-t-slot { font-size: 8.5px; }
+.enc .enc-svg .enc-empty .enc-t-dev { font-style: italic; }
+.enc .enc-svg .enc-t-small { font-size: 10px; }
+.enc .enc-svg .enc-t-tiny { font-size: 7px; }
+.enc .enc-svg .enc-t-model { font-size: 13px; font-weight: bold; letter-spacing: .04em; }
+.enc .enc-svg .enc-t-rear { font-size: 13px; }
+.enc .enc-svg .enc-t-note { font-size: 11px; }
+.enc .enc-unit { fill: var(--enc-unit); stroke: var(--enc-line); stroke-width: 1.5; }
+.enc .enc-cage, .enc .enc-side, .enc .enc-recess { fill: var(--enc-unit); stroke: var(--enc-line); stroke-width: 1; }
+.enc .enc-strip { fill: none; stroke: var(--enc-line); stroke-width: .8; stroke-dasharray: 2 2; }
+.enc .enc-lcd { fill: var(--enc-part); stroke: var(--enc-line); }
+.enc .enc-button, .enc .enc-switch, .enc .enc-port { fill: var(--enc-part); stroke: var(--enc-line); }
+.enc .enc-port-in, .enc .enc-port-pin { fill: var(--enc-line); }
+.enc .enc-grille { fill: none; stroke: var(--enc-line); stroke-dasharray: 1.5 2.5; }
+.enc .enc-led { fill: none; stroke: currentColor; stroke-width: 1.2; }
+.enc .enc-arrow { fill: var(--enc-line); }
+.enc .enc-tray { fill: var(--enc-tray); stroke: var(--enc-line); stroke-width: 1; }
+.enc .enc-bar { fill: var(--enc-standby); }
+.enc .enc-active .enc-bar { fill: var(--enc-active); }
+.enc .enc-new .enc-bar { fill: var(--enc-new); }
+.enc .enc-invalid .enc-bar { fill: var(--enc-invalid); }
+.enc .enc-disabled .enc-bar, .enc .enc-missing .enc-bar { fill: var(--enc-bad); }
+.enc .enc-disabled .enc-tray, .enc .enc-missing .enc-tray { stroke: var(--enc-bad); stroke-width: 2.5; }
+.enc .enc-warn { fill: var(--enc-warn); display: none; }
+.enc .enc-smart-bad .enc-warn { display: inline; }
+.enc .enc-lock { fill: none; stroke: var(--enc-line); stroke-width: 1.2; }
+.enc .enc-handle { fill: var(--enc-part); stroke: none; }
+.enc .enc-empty .enc-tray { fill: none; stroke-dasharray: 4 3; }
+.enc .enc-empty .enc-bar, .enc .enc-empty .enc-handle { display: none; }
+.enc .enc-panel .enc-bay { cursor: help; outline: none; }
+.enc .enc-panel .enc-bay:hover .enc-tray, .enc .enc-panel .enc-bay:focus-visible .enc-tray { stroke: currentColor; stroke-width: 2.5; }
+.enc .enc-panel .enc-bay.enc-locating .enc-tray { stroke: var(--enc-on); stroke-width: 3.5; stroke-dasharray: none; }
+.enc .enc-fan path { fill: var(--enc-line); }
+.enc .enc-fan-ring { fill: var(--enc-tray); stroke: var(--enc-line); stroke-width: 1.5; }
+.enc .enc-fan-hub { fill: currentColor; }
+.enc .enc-sff-on .enc-port { stroke: var(--enc-on); stroke-width: 2; }
+.enc .enc-sff-on .enc-port-in { fill: var(--enc-on); }
+.enc .enc-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 4px; padding: 0; }
+.enc .enc-legend li { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.enc .enc-legend svg { width: 20px; height: 12px; }
+.enc .enc-key-active { fill: var(--enc-active); } .enc .enc-key-standby { fill: var(--enc-standby); } .enc .enc-key-invalid { fill: var(--enc-invalid); } .enc .enc-key-disabled { fill: var(--enc-bad); }
+.enc .enc-key-warn { fill: var(--enc-warn); }
+.enc .enc-key-empty { fill: none; stroke: currentColor; stroke-dasharray: 3 2; }
+.enc .enc-note { max-width: 72em; margin: 4px 0 0; }

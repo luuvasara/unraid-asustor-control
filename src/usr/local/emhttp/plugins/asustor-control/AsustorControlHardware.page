@@ -1,0 +1,78 @@
+Menu="AsustorControl:5"
+Title="Hardware"
+Tag="microchip"
+Markdown="false"
+---
+<?php
+/* Hardware: the server (Unraid, kernel, board, BIOS, CPU), the Asustor drivers, the SATA controller of the bays (PCIe link and
+ * error counters, ports, drives with firmware and SMART counters as Unraid last read them), known issues and firmware.
+ * READ-ONLY: sysfs, /proc and Unraid's files. */
+require_once "$docroot/plugins/asustor-control/include/issues.php";
+acs_head();
+$ac_hv = acs_view(); $ac_dr = acs_drivers();
+$ac_icon = ['ok' => 'fa-check green-text', 'warn' => 'fa-warning orange-text', 'info' => 'fa-info-circle'];
+$ac_uv = @parse_ini_file(acs_root() . '/etc/unraid-version') ?: [];
+$ac_cpu = ''; foreach (@file(acs_root() . '/proc/cpuinfo') ?: [] as $ac_l) if (strpos($ac_l, 'model name') === 0) { $ac_cpu = trim(explode(':', $ac_l, 2)[1] ?? ''); break; }
+$ac_mods = ['asustor' => 'platform driver', 'asustor_it87' => 'fan and temperature sensors (IT8625E)', 'asustor_gpio_it87' => 'GPIO of the IT8625E (LEDs, buttons)', 'leds_gpio' => 'LED driver (add-on)', 'gpio_keys_polled' => 'button driver (add-on)'];
+?>
+<div class="ac">
+<div class="title"><span class="left"><i class="fa fa-server title"></i>Server</span></div>
+<dl class="ac-facts">
+  <dt>Unraid</dt><dd><?=acs_h($ac_uv['version'] ?? 'unknown')?></dd>
+  <dt>Kernel</dt><dd><?=acs_h(trim((string)@file_get_contents(acs_root() . '/proc/sys/kernel/osrelease')) ?: php_uname('r'))?></dd>
+  <dt>Board (DMI)</dt><dd><?=acs_h(trim(acs_dmi('sys_vendor') . ' / ' . acs_dmi('product_name'), ' /') ?: 'unknown')?></dd>
+  <dt>Unit</dt><dd><?=acs_h($ac_hv['units'] ? 'Asustor AS6706T (board and ASM1166 SATA controller)' : 'not an AS6706T, or its SATA controller is not seen')?></dd>
+  <dt>CPU</dt><dd><?=acs_h($ac_cpu ?: 'unknown')?></dd>
+</dl>
+
+<div class="title"><span class="left"><i class="fa fa-cogs title"></i>Drivers</span></div>
+<div class="ac-scroll"><table class="unraid ac-t">
+<thead><tr><th scope="col">Module</th><th scope="col">What for</th><th scope="col">Loaded</th></tr></thead><tbody>
+<?php foreach ($ac_mods as $ac_m => $ac_what): ?>
+<tr><th scope="row"><?=acs_h($ac_m)?></th><td><?=acs_h($ac_what)?></td><td><?php if ($ac_dr['modules'][$ac_m]): ?><i class="fa fa-check green-text" aria-hidden="true"></i> yes<?php else: ?><i class="fa fa-minus" aria-hidden="true"></i> no<?php endif; ?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div>
+<p class="ac-p"><?=acs_h($ac_dr['watchdog'] ? 'Driver watchdog: ' . ($ac_dr['watchdog']['message'] ?? $ac_dr['watchdog']['state'] ?? '') : 'Driver watchdog: no result yet (it runs when the plugin starts).')?></p>
+
+<?php foreach ($ac_hv['units'] as $ac_u): ?>
+<div class="title"><span class="left"><i class="fa fa-microchip title"></i>SATA controller of the bays</span></div>
+<div class="ac-scroll"><table class="unraid ac-t">
+<caption class="ac-cap">PCIe: the ASM1166 on the board</caption>
+<thead><tr><th scope="col">Part</th><th scope="col">Address</th><th scope="col">Driver</th><th scope="col">Link now</th><th scope="col">Link possible</th><th scope="col">PCIe errors <span class="ac-small">(correctable / non-fatal / fatal)</span></th></tr></thead><tbody>
+<?php foreach ($ac_u['links'] as $ac_l): $ac_c = null; foreach ($ac_u['hw']['controllers'] as $ac_x) if ($ac_x['address'] === $ac_l['to']) $ac_c = $ac_x; ?>
+<tr><th scope="row">ASMedia ASM1166</th><td><?=acs_h($ac_l['to'])?></td><td><?=acs_h($ac_c ? ($ac_c['driver'] ?: 'none') : '-')?></td>
+<td><?php if ($ac_l['state'] !== 'ok'): ?><i class="fa fa-warning orange-text" aria-hidden="true"></i> <?php endif; ?><?=acs_h(enclosure_link_text($ac_l['speed'], $ac_l['width']))?></td><td><?=acs_h(enclosure_link_text($ac_l['want_speed'], $ac_l['want_width']))?></td>
+<td><?=acs_h($ac_c ? implode(' / ', array_map(function ($x) { return $x === null ? '-' : (string)$x; }, $ac_c['aer'])) : '-')?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div>
+<p class="ac-p">AHCI capabilities <?=acs_h($ac_u['hw']['controllers'][0]['caps'] ?? '-')?>: <?=acs_h(($ac_u['hw']['controllers'][0]['ems'] ?? null) === false ? 'no enclosure management (the bay LEDs are on the board\'s GPIO instead)' : 'enclosure management offered')?>, <?=acs_h(($ac_u['hw']['controllers'][0]['pmp'] ?? null) === false ? 'no port multipliers' : 'port multipliers supported')?>.</p>
+<div class="ac-scroll"><table class="unraid ac-t">
+<caption class="ac-cap">Drives in the bays</caption>
+<thead><tr><th scope="col">Bay</th><th scope="col">Port</th><th scope="col">SATA link</th><th scope="col">Device</th><th scope="col">Model</th><th scope="col">Size</th><th scope="col">Firmware</th><th scope="col">Power-on hours</th><th scope="col">Reallocated</th><th scope="col">Pending</th><th scope="col">CRC errors</th></tr></thead><tbody>
+<?php foreach ($ac_u['hw']['controllers'] as $ac_c) foreach ($ac_c['ports'] as $ac_p):
+  $ac_b = null; foreach ($ac_u['bays'] as $ac_x) if ($ac_x['device'] === $ac_p['device'] && $ac_p['device'] !== '') $ac_b = $ac_x;
+  $ac_sm = $ac_b ? acs_smart_attrs($ac_b['slot_id']) : []; ?>
+<tr><th scope="row"><?=acs_h($ac_p['bay'] ?: '-')?></th><td><?=acs_h("port {$ac_p['port_no']} ({$ac_p['ata']})")?></td><td><?=acs_h($ac_p['speed'] . ($ac_p['limit'] !== '' && $ac_p['limit'] !== $ac_p['speed'] ? " of {$ac_p['limit']}" : ''))?></td>
+<td><?=acs_h($ac_p['device'] ?: '-')?></td><td><?=acs_h($ac_b['model'] ?? '')?></td><td><?=acs_h($ac_b ? enclosure_size($ac_b['size']) : '')?></td><td><?=acs_h($ac_p['rev'] ?: '-')?></td>
+<?php foreach (['hours', 'realloc', 'pending', 'crc'] as $ac_k): ?><td><?=acs_h(isset($ac_sm[$ac_k]) ? number_format($ac_sm[$ac_k], 0, '.', ' ') : '-')?></td><?php endforeach; ?></tr>
+<?php endforeach; ?>
+</tbody></table></div>
+<p class="ac-p">SMART counters are from the report Unraid saved last time it read each drive; a drive in standby keeps its last report and is not woken.</p>
+<?php endforeach; ?>
+
+<div class="title"><span class="left"><i class="fa fa-stethoscope title"></i>Known issues</span><span class="ac-sub">data of <?=acs_h(acs_issue_data()['updated'] ?? '-')?></span></div>
+<div class="ac-scroll"><table class="unraid ac-t ac-issues">
+<thead><tr><th scope="col">Issue</th><th scope="col">On this server</th><th scope="col">What it is, what to do</th><th scope="col">Source</th></tr></thead><tbody>
+<?php foreach (acs_issues($ac_hv) as $ac_issue): ?>
+<tr><th scope="row"><?=acs_h($ac_issue['title'])?></th><td><i class="fa <?=$ac_icon[$ac_issue['state']]?>" aria-hidden="true"></i> <?=acs_h($ac_issue['status'])?></td><td><?=acs_h($ac_issue['text'])?></td><td><?=acs_h($ac_issue['source'])?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div>
+
+<div class="title"><span class="left"><i class="fa fa-code-fork title"></i>Firmware</span></div>
+<div class="ac-scroll"><table class="unraid ac-t ac-issues">
+<thead><tr><th scope="col">Part</th><th scope="col">Version</th><th scope="col">Notes</th><th scope="col">Source</th></tr></thead><tbody>
+<?php foreach (acs_firmware($ac_hv) as $ac_f): ?>
+<tr><th scope="row"><?=acs_h($ac_f['part'])?></th><td><?=acs_h($ac_f['value'])?></td><td><?=acs_h($ac_f['text'])?></td><td><?=acs_h($ac_f['source'])?></td></tr>
+<?php endforeach; ?>
+</tbody></table></div>
+</div>
