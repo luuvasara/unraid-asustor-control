@@ -93,6 +93,11 @@ STJ() { cat "$1/var/local/emhttp/plugins/asustor-control/hwlog-status.json"; }
 SR=$W/sr11; mksr "$SR"; mkexcl "$SR" cache yes cache; L=$SR/mnt/cache/appdata/asustor-control/hwlog
 flush "$SR" && [ -f "$L/hwlog-$TODAY.csv" ] && [ "$(stat -c %a "$L")" = 755 ] && [ -z "$(BUF "$SR")" ] && STJ "$SR" | grep -q '"last_error":""' \
   && ok "hwmon: exclusive-share appdata symlink (-> /mnt/<pool>/appdata, exclusive in shares.ini) is written through" || bad "hwmon: exclusive-share appdata refused"
+SR=$W/sr11r; mksr "$SR"; mkexcl "$SR" cache yes cache; rm "$SR/mnt/user/appdata"; ln -s ../cache/appdata "$SR/mnt/user/appdata"; L=$SR/mnt/cache/appdata/asustor-control/hwlog
+flush "$SR" && [ -f "$L/hwlog-$TODAY.csv" ] && [ -z "$(BUF "$SR")" ] && STJ "$SR" | grep -q '"last_error":""' \
+  && ok "hwmon: exclusive-share symlink in shfs's relative form (-> ../cache/appdata, as on 7.3.4) is written through" || bad "hwmon: relative exclusive-share symlink refused"
+SR=$W/sr11e; mksr "$SR"; mkexcl "$SR" cache yes cache; rm "$SR/mnt/user/appdata"; mkdir -p "$SR/mnt/user/x"; ln -s ../../appdata "$SR/mnt/user/appdata"
+! flush "$SR" && ok "hwmon: a relative appdata symlink that is not ../<pool>/appdata is refused" || bad "hwmon: accepted a relative appdata symlink outside /mnt/<pool>"
 SR=$W/sr12; mksr "$SR"; mkexcl "$SR" cache no cache
 rc=0; flush "$SR" || rc=$?; [ $rc -ne 0 ] && [ -z "$(ls -A "$SR/mnt/cache/appdata")" ] && [ -n "$(BUF "$SR")" ] && STJ "$SR" | grep -q 'not Unraid.s exclusive share' \
   && ok "hwmon: appdata symlink is refused when shares.ini does not say exclusive" || bad "hwmon: wrote through a non-exclusive appdata symlink"

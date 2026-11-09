@@ -2,6 +2,9 @@
 
 Copied by the build from the <CHANGES> block of asustor-control.plg; edit the .plg, not this file.
 
+## 2026.11.09d
+- The behaviour log fix of 09c now also accepts the link in the form Unraid actually writes it (../cache/appdata, relative), not only /mnt/cache/appdata. Same checks as in 09c.
+
 ## 2026.11.09c
 - The behaviour log is written again when appdata is an exclusive share. Unraid then shows /mnt/user/appdata as a link to the pool (for example /mnt/cache/appdata), and the symlink protection refused it, so the rows stayed in RAM and the Overview said "cannot write ... (code 3)". That link is now followed only when it points to appdata on a pool and Unraid's share settings say appdata is exclusive on that same pool; everything below it is still opened without following links. The rows still in RAM are written at the next flush.
 - A missing log folder is now created the same way, so it can never be created through a link.

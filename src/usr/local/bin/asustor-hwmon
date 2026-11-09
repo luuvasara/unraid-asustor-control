@@ -336,10 +336,11 @@ logdir_op() {
         if (-l $base) {
             # Unraid exclusive share: /mnt/user/appdata -> /mnt/<pool>/appdata (absolute, as shfs makes it)
             my $t = readlink($base); exit 6 unless defined $t;
-            if (length $root) {   # tests (ASUSTOR_SYSROOT): the fake sysroot prefixes the target; empty on a server
+            if (length $root && $t !~ m{\A\.\./}) {   # tests (ASUSTOR_SYSROOT): the fake sysroot prefixes an absolute target; empty on a server
                 exit 6 unless index($t, "$root/") == 0; $t = substr($t, length $root);
             }
-            my ($pool) = $t =~ m{\A/mnt/([A-Za-z0-9_][A-Za-z0-9_.-]*)/appdata\z} or exit 6;
+            # shfs writes it relative (../<pool>/appdata, seen on 7.3.4); the absolute form is accepted too
+            my ($pool) = $t =~ m{\A(?:/mnt/|\.\./)([A-Za-z0-9_][A-Za-z0-9_.-]*)/appdata\z} or exit 6;
             exit 6 if $pool =~ m{\A(?:user|user0|disks|remotes|addons|rootshare)\z};
             my ($sec, %sh) = ("");
             open(my $ini, "<", "$root/var/local/emhttp/shares.ini") or exit 6;
