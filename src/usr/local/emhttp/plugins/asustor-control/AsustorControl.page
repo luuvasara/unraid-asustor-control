@@ -1,6 +1,6 @@
 Menu="Utilities"
 Type="xmenu"
 Title="Asustor Control"
-Icon="fa-microchip"
+Icon="asustor-control.png"
 Tag="microchip"
 Tabs="true"

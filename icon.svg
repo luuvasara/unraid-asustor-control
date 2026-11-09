@@ -2,11 +2,19 @@
   <title>Asustor Control</title>
   <rect x="8" y="8" width="240" height="240" rx="44" fill="#1f3b57"/>
   <rect x="21" y="21" width="214" height="214" rx="32" fill="none" stroke="#e2601b" stroke-width="8"/>
-  <rect x="62" y="48" width="132" height="160" rx="14" fill="#ffffff"/>
-  <rect x="78" y="64" width="100" height="30" rx="4" fill="#e2601b"/>
-  <rect x="78" y="106" width="100" height="14" rx="4" fill="#1f3b57"/>
-  <rect x="78" y="130" width="100" height="14" rx="4" fill="#1f3b57"/>
-  <rect x="78" y="154" width="100" height="14" rx="4" fill="#1f3b57"/>
-  <circle cx="90" cy="188" r="6" fill="#e2601b"/>
-  <circle cx="110" cy="188" r="6" fill="#1f3b57"/>
+  <rect x="40" y="62" width="176" height="132" rx="12" fill="#ffffff"/>
+  <g fill="#1f3b57">
+    <rect x="80" y="72" width="126" height="34" rx="4"/>
+    <rect x="80" y="114" width="17" height="70" rx="3"/><rect x="102" y="114" width="17" height="70" rx="3"/>
+    <rect x="124" y="114" width="17" height="70" rx="3"/><rect x="146" y="114" width="17" height="70" rx="3"/>
+    <rect x="168" y="114" width="17" height="70" rx="3"/><rect x="190" y="114" width="16" height="70" rx="3"/>
+    <rect x="49" y="166" width="22" height="10" rx="2"/>
+  </g>
+  <rect x="90" y="79" width="70" height="20" rx="2" fill="#e2601b"/>
+  <g fill="#ffffff">
+    <rect x="168" y="78" width="14" height="10" rx="1.5"/><rect x="186" y="78" width="14" height="10" rx="1.5"/>
+    <rect x="168" y="91" width="14" height="10" rx="1.5"/><rect x="186" y="91" width="14" height="10" rx="1.5"/>
+  </g>
+  <circle cx="60" cy="82" r="6" fill="#e2601b"/>
+  <circle cx="60" cy="100" r="4.5" fill="#1f3b57"/>
 </svg>

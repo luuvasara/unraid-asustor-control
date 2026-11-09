@@ -24,6 +24,11 @@ Intel Celeron N5105, IT8625E Super I/O) under Unraid 6.12 and 7.x, currently Unr
 (kernel 6.18.58-Unraid). Other models are not tested; the hardware report form exists to collect
 what other units look like.
 
+## Companion plugins
+
+- **[Asustor Platform Drivers](https://github.com/Terebi42/unraid-asustor-pfd)** loads the Asustor kernel drivers that this plugin reads and drives. It is needed; see [Requirements](#requirements).
+- **FanCtrl Plus** (Community Applications) runs the fan. This plugin reads what it does and logs it.
+
 ## What it does
 
 | | |
@@ -93,7 +98,7 @@ Please use the hardware report form (Issues, New issue, Hardware report) for oth
 
 ## Screenshots
 
-Made-up data, one panel each.
+Example data, one panel each.
 
 Overview: the unit as it looks, each bay with its drive, temperature and state.
 
@@ -123,6 +128,10 @@ LEDs and Buttons: the bay map with activity LED, fault LED and Locate, the bay o
 
 ![LEDs and Buttons](docs/screenshots/leds.png)
 
+Report: an anonymised hardware report to copy, download or open as an issue.
+
+![Report](docs/screenshots/report-black.png)
+
 ## Install
 
 Unraid webGui: **Plugins, Install Plugin**, paste
@@ -143,7 +152,7 @@ History, Hardware, Report, About.
 Needs bash, GNU tar, xz, Python 3; PHP (CLI) for the page lint (optional).
 
     ./tests/run-tests.sh      # offline: script syntax, PHP lint, .plg/package consistency, hwlog-report.py, harness fixtures
-    ./tests/render-test.sh     # every tab in headless Chrome, all themes, on a made-up AS6706T (tests/mkserver.sh) and on another board (needs Chrome, PHP and network the first time for the stylesheets)
+    ./tests/render-test.sh     # every tab in headless Chrome, all themes, on an example AS6706T (tests/mkserver.sh) and on another board (needs Chrome, PHP and network the first time for the stylesheets)
     ./build.sh                # runs kit/bin/build.sh; version comes from asustor-control.plg, bump it on every change
 
 `build.sh` builds `packages/asustor-control-<version>-x86_64-1.txz` (file modes forced, archive
@@ -151,7 +160,7 @@ root checked, owner root), writes the package MD5 into the `.plg` and regenerate
 `CHANGELOG.md` from the `.plg`'s `<CHANGES>`. Build on a workstation, never on the NAS.
 
 The screenshots come from the kit's render harness (`kit/render/`) with Unraid's own stylesheets,
-on the made-up AS6706T of `tests/mkserver.sh` and the made-up daemon answers of
+on the example AS6706T of `tests/mkserver.sh` and the example daemon answers of
 `tests/harness/mkfixture.py`, cropped to one panel each.
 
 ### Repository layout
@@ -163,7 +172,7 @@ on the made-up AS6706T of `tests/mkserver.sh` and the made-up daemon answers of
 | `kmods/` | the LED/button driver add-on packages, one per Unraid kernel (listed in `src/.../kmods.manifest`); temporary until the Asustor Platform Drivers plugin ships the same modules |
 | `src/` | the package contents, laid out as on the server (`usr/local/emhttp/plugins/asustor-control/`, `usr/local/bin/`, `etc/rc.d/`) |
 | `build.sh` | builds the package |
-| `tests/` | offline checks (`tests/run-tests.sh`), the render test (`tests/render-test.sh`) and its made-up server (`tests/mkserver.sh`) |
+| `tests/` | offline checks (`tests/run-tests.sh`), the render test (`tests/render-test.sh`) and its example server (`tests/mkserver.sh`) |
 | `kit/` | the shared plugin kit (build, About tab, drive map, the AS6706T profile and drawing, Main page labels), copied in by `kit-sync` |
 | `tools/` | `hwlog-report.py`, offline analysis of the behaviour log |
 | `docs/` | `hwlog-format.md`, the behaviour log format; `screenshots/` for this README |

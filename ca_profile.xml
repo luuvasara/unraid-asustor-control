@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <CommunityApplications>
-  <Profile>Asustor Control for Unraid drives the front-panel LCD and LEDs of an Asustor NAS and shows what the fan, CPU and disks are doing. Support and questions: the GitHub issues of this repository.</Profile>
+  <Profile>Asustor Control for Unraid drives the front-panel LCD and LEDs of an Asustor NAS and shows the AS6706T as it looks: its bays live, bay labels on the Main page, temperature and fan history, a hardware inventory with known issues and an anonymised hardware report. Support and questions: the GitHub issues of this repository.</Profile>
   <Icon>https://raw.githubusercontent.com/luuvasara/unraid-asustor-control/main/icon.png</Icon>
   <WebPage>https://github.com/luuvasara/unraid-asustor-control</WebPage>
 </CommunityApplications>

@@ -2,6 +2,10 @@
 
 Copied by the build from the <CHANGES> block of asustor-control.plg; edit the .plg, not this file.
 
+## 2026.11.09b
+- New icon: the AS6706T front, its LCD and six trays. The Plugins page now shows the icon, a description and a support link (the GitHub issues), and the Utilities tile uses the same icon.
+- The Community Applications description and the README now describe the current tabs. No change in what the plugin does.
+
 ## 2026.11.09a
 - New Overview tab: the AS6706T drawn as it looks, front and rear, after Asustor's installation guide, with each bay's drive, temperature and state, live. The hardware monitor, drive temperatures, LCD preview, action log and actions are on the same tab, as before.
 - Bay labels on the Main page: each drive in a bay shows "Bay 1" to "Bay 6" after its name. They can be switched off on the Overview.
@@ -32,7 +36,7 @@ Copied by the build from the <CHANGES> block of asustor-control.plg; edit the .p
 
 ## 2026.10.27a
 - Behaviour log: symlink checks on the log dir and day files (superseded by 2026.10.27b); process names from /proc are reduced to [A-Za-z0-9._-] before they are logged. (Never released on its own.)
-- README: screenshots of both tabs (made-up data, rendered in the new offline harness tests/harness/), known limits (front LEDs and buttons, missing driver build after an Unraid update), credits up front.
+- README: screenshots of both tabs (example data, rendered in the new offline harness tests/harness/), known limits (front LEDs and buttons, missing driver build after an Unraid update), credits up front.
 
 ## 2026.10.26a
 - Published: install and update from GitHub (https://github.com/luuvasara/unraid-asustor-control). The .plg now has a pluginURL, so Unraid's update check sees new versions; the package is downloaded from the repository's packages/ folder and checked against its MD5 before it is installed. No change in what the plugin does.

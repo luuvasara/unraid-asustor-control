@@ -9,13 +9,18 @@
   <MinVer>6.12.0</MinVer>
   <License>GPL-2.0</License>
   <ReadMe>https://github.com/luuvasara/unraid-asustor-control#readme</ReadMe>
-  <ExtraSearchTerms>asustor nas lcd led fan temperature hwmon lockerstor</ExtraSearchTerms>
-  <Overview>Drives the front-panel LCD and the LEDs of an Asustor NAS that runs Unraid, and shows and logs what the fan, the CPU and the disks are doing.
+  <ExtraSearchTerms>asustor as6706t lockerstor nas lcd led bay fan temperature history hwmon</ExtraSearchTerms>
+  <Overview>Drives the front-panel LCD and LEDs of an Asustor NAS running Unraid, and shows the AS6706T as it looks, with its bays live.
 
+- Overview: the AS6706T drawn front and rear, each bay with its drive, temperature and state; no drive is woken. Fan, CPU and drive temperatures, the LCD preview and an action log.
+- Bay labels on the Main page.
 - The LCD cycles through the screens you pick: hostname, IP address, temperatures, array status, time and uptime, fan.
-- Front-panel LEDs: per-bay disk activity and fault LEDs, and a status LED that follows the array. Locate blinks a bay's LED.
-- USB Copy button: a short and a long press can log, notify, locate or run your own script.
-- A hardware monitor with fan, CPU and drive temperatures, a fan history chart and a log of what the fan reacted to.
+- Front-panel LEDs: per-bay activity and fault LEDs, a status LED that follows the array, and Locate. The USB Copy button can log, notify, locate or run your own script.
+- History of the CPU and drive temperatures and the fan.
+- A hardware inventory with known issues and firmware.
+- A Report tab that anonymises what your unit looks like, for support of other models.
 
-It needs the kernel drivers from the Asustor Platform Drivers plugin. Fan control stays with FanCtrl Plus: this plugin has no fan curve of its own.</Overview>
+It needs the kernel drivers from the Asustor Platform Drivers plugin. Fan control stays with FanCtrl Plus: this plugin has no fan curve of its own.
+
+Experimental. Tested on the AS6706T.</Overview>
 </Plugin>
